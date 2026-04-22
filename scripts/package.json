@@ -16,6 +16,6 @@
     "@types/bcryptjs": "^3.0.0",
     "@workspace/db": "workspace:*",
     "bcryptjs": "^3.0.3",
-    "drizzle-orm": "catalog:"
+    "mongoose": "^9.5.0"
   }
 }

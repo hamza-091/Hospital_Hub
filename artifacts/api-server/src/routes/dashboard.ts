@@ -1,16 +1,20 @@
 import { Router, type IRouter } from "express";
-import { db, usersTable, doctorsTable, patientsTable, appointmentsTable, invoicesTable, medicalRecordsTable, prescriptionsTable } from "@workspace/db";
-import { eq, and, gte, lt, count, sum, sql } from "drizzle-orm";
+import { User, Doctor, Patient, Appointment, Invoice, MedicalRecord, Prescription } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 
 const router: IRouter = Router();
 
-function normalizeAppt(appt: typeof appointmentsTable.$inferSelect) {
+function publicUserMin(u: any) {
+  if (!u) return null;
+  return { id: u._id, name: u.name };
+}
+
+function normalizeAppt(appt: any) {
   const scheduledAt = new Date(appt.scheduledAt);
   const endAt = new Date(scheduledAt.getTime() + 30 * 60 * 1000);
   const pad = (n: number) => n.toString().padStart(2, "0");
   return {
-    id: appt.id,
+    id: appt._id,
     patientId: appt.patientId,
     doctorId: appt.doctorId,
     appointmentDate: scheduledAt.toISOString().split("T")[0],
@@ -23,16 +27,16 @@ function normalizeAppt(appt: typeof appointmentsTable.$inferSelect) {
   };
 }
 
-function normalizeInvoice(inv: typeof invoicesTable.$inferSelect) {
+function normalizeInvoice(inv: any) {
   return {
-    id: inv.id,
+    id: inv._id,
     patientId: inv.patientId,
     appointmentId: inv.appointmentId,
     invoiceDate: inv.issuedAt,
     dueDate: null,
-    totalAmount: inv.total,
+    totalAmount: Number(inv.total),
     status: inv.status === "unpaid" ? "pending" : inv.status === "refunded" ? "cancelled" : "paid",
-    items: (inv.lineItems ?? []).map(li => ({
+    items: (inv.lineItems ?? []).map((li: any) => ({
       description: li.description,
       amount: li.total,
       quantity: li.quantity,
@@ -43,9 +47,9 @@ function normalizeInvoice(inv: typeof invoicesTable.$inferSelect) {
   };
 }
 
-function normalizePrescription(rx: typeof prescriptionsTable.$inferSelect) {
+function normalizePrescription(rx: any) {
   return {
-    id: rx.id,
+    id: rx._id,
     patientId: rx.patientId,
     doctorId: rx.doctorId,
     appointmentId: rx.appointmentId,
@@ -63,23 +67,17 @@ function normalizePrescription(rx: typeof prescriptionsTable.$inferSelect) {
   };
 }
 
-async function attachApptUsers(appts: typeof appointmentsTable.$inferSelect[]) {
+async function attachApptUsers(appts: any[]) {
   return Promise.all(appts.map(async (appt) => {
-    const [doctor] = await db.select().from(doctorsTable).where(eq(doctorsTable.id, appt.doctorId));
-    const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, appt.patientId));
+    const doctor = await Doctor.findById(appt.doctorId).lean();
+    const patient = await Patient.findById(appt.patientId).lean();
     let doctorUser = null, patientUser = null;
-    if (doctor) {
-      const [u] = await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(eq(usersTable.id, doctor.userId));
-      doctorUser = u;
-    }
-    if (patient) {
-      const [u] = await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(eq(usersTable.id, patient.userId));
-      patientUser = u;
-    }
+    if (doctor) doctorUser = await User.findById(doctor.userId).lean();
+    if (patient) patientUser = await User.findById(patient.userId).lean();
     return {
       ...normalizeAppt(appt),
-      doctor: doctor ? { ...doctor, user: doctorUser } : null,
-      patient: patient ? { ...patient, user: patientUser } : null,
+      doctor: doctor ? { ...doctor, id: doctor._id, user: publicUserMin(doctorUser) } : null,
+      patient: patient ? { ...patient, id: patient._id, user: publicUserMin(patientUser) } : null,
     };
   }));
 }
@@ -91,48 +89,45 @@ router.get("/dashboard/admin", requireAuth, async (req, res): Promise<void> => {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-  const [{ totalPatients }] = await db.select({ totalPatients: count() }).from(patientsTable);
-  const [{ totalDoctors }] = await db.select({ totalDoctors: count() }).from(doctorsTable);
+  const totalPatients = await Patient.countDocuments();
+  const totalDoctors = await Doctor.countDocuments();
 
-  const [{ todayAppointments }] = await db.select({ todayAppointments: count() })
-    .from(appointmentsTable)
-    .where(and(gte(appointmentsTable.scheduledAt, todayStart), lt(appointmentsTable.scheduledAt, todayEnd)));
+  const todayAppointments = await Appointment.countDocuments({
+    scheduledAt: { $gte: todayStart, $lt: todayEnd },
+  });
 
-  const [revenueRow] = await db.select({ revenue: sum(invoicesTable.total) })
-    .from(invoicesTable)
-    .where(and(
-      eq(invoicesTable.status, "paid"),
-      gte(invoicesTable.paidAt, monthStart),
-      lt(invoicesTable.paidAt, monthEnd)
-    ));
-  const monthlyRevenue = Number(revenueRow?.revenue || 0);
+  const paidThisMonth = await Invoice.find({
+    status: "paid",
+    paidAt: { $gte: monthStart, $lt: monthEnd },
+  }).lean();
+  const monthlyRevenue = paidThisMonth.reduce((s, inv: any) => s + Number(inv.total), 0);
 
-  const statusRows = await db.select({ status: appointmentsTable.status, cnt: count() })
-    .from(appointmentsTable).groupBy(appointmentsTable.status);
-  const appointmentsByStatus = statusRows.map(r => ({ status: r.status, count: Number(r.cnt) }));
+  const statusAgg = await Appointment.aggregate([
+    { $group: { _id: "$status", cnt: { $sum: 1 } } },
+  ]);
+  const appointmentsByStatus = statusAgg.map((r: any) => ({ status: r._id, count: r.cnt }));
 
-  const [{ pendingInvoices }] = await db.select({ pendingInvoices: count() })
-    .from(invoicesTable).where(eq(invoicesTable.status, "unpaid"));
-  const [{ totalInvoices }] = await db.select({ totalInvoices: count() }).from(invoicesTable);
+  const pendingInvoices = await Invoice.countDocuments({ status: "unpaid" });
+  const totalInvoices = await Invoice.countDocuments();
 
-  const rawAppts = await db.select().from(appointmentsTable).orderBy(appointmentsTable.createdAt).limit(5);
+  const rawAppts = await Appointment.find({}).sort({ createdAt: 1 }).limit(5).lean();
   const recentAppointments = await attachApptUsers(rawAppts);
 
   res.json({
-    totalPatients: Number(totalPatients),
-    totalDoctors: Number(totalDoctors),
-    todayAppointments: Number(todayAppointments),
+    totalPatients,
+    totalDoctors,
+    todayAppointments,
     monthlyRevenue,
     appointmentsByStatus,
-    pendingInvoices: Number(pendingInvoices),
-    totalInvoices: Number(totalInvoices),
+    pendingInvoices,
+    totalInvoices,
     recentAppointments,
   });
 });
 
 router.get("/dashboard/doctor", requireAuth, async (req, res): Promise<void> => {
   const userId = req.user!.userId;
-  const [doctor] = await db.select().from(doctorsTable).where(eq(doctorsTable.userId, userId));
+  const doctor = await Doctor.findOne({ userId }).lean();
   if (!doctor) { res.status(404).json({ error: "Doctor profile not found" }); return; }
 
   const now = new Date();
@@ -140,87 +135,74 @@ router.get("/dashboard/doctor", requireAuth, async (req, res): Promise<void> => 
   const todayEnd = new Date(todayStart.getTime() + 86400000);
   const weekStart = new Date(todayStart.getTime() - 7 * 86400000);
 
-  const rawTodayAppts = await db.select().from(appointmentsTable)
-    .where(and(
-      eq(appointmentsTable.doctorId, doctor.id),
-      gte(appointmentsTable.scheduledAt, todayStart),
-      lt(appointmentsTable.scheduledAt, todayEnd)
-    )).orderBy(appointmentsTable.scheduledAt);
+  const rawTodayAppts = await Appointment.find({
+    doctorId: doctor._id,
+    scheduledAt: { $gte: todayStart, $lt: todayEnd },
+  }).sort({ scheduledAt: 1 }).lean();
   const todayAppointments = await attachApptUsers(rawTodayAppts);
 
-  const [{ weekPatientCount }] = await db.select({ weekPatientCount: count() })
-    .from(appointmentsTable).where(and(
-      eq(appointmentsTable.doctorId, doctor.id),
-      gte(appointmentsTable.scheduledAt, weekStart),
-      lt(appointmentsTable.scheduledAt, todayEnd)
-    ));
+  const weekPatientCount = await Appointment.countDocuments({
+    doctorId: doctor._id,
+    scheduledAt: { $gte: weekStart, $lt: todayEnd },
+  });
 
-  const [{ pendingAppointments }] = await db.select({ pendingAppointments: count() })
-    .from(appointmentsTable).where(and(
-      eq(appointmentsTable.doctorId, doctor.id),
-      eq(appointmentsTable.status, "pending")
-    ));
+  const pendingAppointments = await Appointment.countDocuments({
+    doctorId: doctor._id,
+    status: "pending",
+  });
 
-  const [{ completedThisWeek }] = await db.select({ completedThisWeek: count() })
-    .from(appointmentsTable).where(and(
-      eq(appointmentsTable.doctorId, doctor.id),
-      eq(appointmentsTable.status, "completed"),
-      gte(appointmentsTable.scheduledAt, weekStart)
-    ));
+  const completedThisWeek = await Appointment.countDocuments({
+    doctorId: doctor._id,
+    status: "completed",
+    scheduledAt: { $gte: weekStart },
+  });
 
-  const recentRawRecords = await db.select().from(medicalRecordsTable)
-    .where(eq(medicalRecordsTable.doctorId, doctor.id))
-    .orderBy(medicalRecordsTable.createdAt).limit(5);
+  const recentRawRecords = await MedicalRecord.find({ doctorId: doctor._id })
+    .sort({ createdAt: 1 }).limit(5).lean();
 
-  const recentRecords = await Promise.all(recentRawRecords.map(async (rec) => {
-    const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, rec.patientId));
+  const recentRecords = await Promise.all(recentRawRecords.map(async (rec: any) => {
+    const patient = await Patient.findById(rec.patientId).lean();
     let patientUser = null;
-    if (patient) {
-      const [u] = await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(eq(usersTable.id, patient.userId));
-      patientUser = u;
-    }
+    if (patient) patientUser = await User.findById(patient.userId).lean();
     return {
       ...rec,
+      id: rec._id,
       visitDate: rec.createdAt,
-      patient: patient ? { ...patient, name: patientUser?.name ?? null, user: patientUser } : null,
+      patient: patient ? { ...patient, id: patient._id, name: patientUser?.name ?? null, user: publicUserMin(patientUser) } : null,
     };
   }));
 
   res.json({
     todayAppointments,
-    weekPatientCount: Number(weekPatientCount),
-    pendingAppointments: Number(pendingAppointments),
-    completedThisWeek: Number(completedThisWeek),
+    weekPatientCount,
+    pendingAppointments,
+    completedThisWeek,
     recentRecords,
   });
 });
 
 router.get("/dashboard/patient", requireAuth, async (req, res): Promise<void> => {
   const userId = req.user!.userId;
-  const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.userId, userId));
+  const patient = await Patient.findOne({ userId }).lean();
   if (!patient) { res.status(404).json({ error: "Patient profile not found" }); return; }
 
   const now = new Date();
-  const rawAppts = await db.select().from(appointmentsTable)
-    .where(and(
-      eq(appointmentsTable.patientId, patient.id),
-      gte(appointmentsTable.scheduledAt, now),
-      sql`${appointmentsTable.status} != 'cancelled'`
-    )).orderBy(appointmentsTable.scheduledAt).limit(5);
+  const rawAppts = await Appointment.find({
+    patientId: patient._id,
+    scheduledAt: { $gte: now },
+    status: { $ne: "cancelled" },
+  }).sort({ scheduledAt: 1 }).limit(5).lean();
   const upcomingAppointments = await attachApptUsers(rawAppts);
 
-  const rawRx = await db.select().from(prescriptionsTable)
-    .where(eq(prescriptionsTable.patientId, patient.id))
-    .orderBy(prescriptionsTable.createdAt).limit(3);
+  const rawRx = await Prescription.find({ patientId: patient._id })
+    .sort({ createdAt: 1 }).limit(3).lean();
   const recentPrescriptions = rawRx.map(normalizePrescription);
 
-  const unpaidInvoices = await db.select().from(invoicesTable)
-    .where(and(eq(invoicesTable.patientId, patient.id), eq(invoicesTable.status, "unpaid")));
-  const outstandingBalance = unpaidInvoices.reduce((acc, inv) => acc + Number(inv.total), 0);
+  const unpaidInvoices = await Invoice.find({ patientId: patient._id, status: "unpaid" }).lean();
+  const outstandingBalance = unpaidInvoices.reduce((acc, inv: any) => acc + Number(inv.total), 0);
 
-  const rawInvoices = await db.select().from(invoicesTable)
-    .where(eq(invoicesTable.patientId, patient.id))
-    .orderBy(invoicesTable.issuedAt).limit(5);
+  const rawInvoices = await Invoice.find({ patientId: patient._id })
+    .sort({ issuedAt: 1 }).limit(5).lean();
   const recentInvoices = rawInvoices.map(normalizeInvoice);
 
   res.json({
@@ -235,37 +217,29 @@ router.get("/dashboard/activity", requireAuth, async (req, res): Promise<void> =
   const { limit: limitStr } = req.query as { limit?: string };
   const limit = Math.min(parseInt(limitStr || "20", 10), 50);
 
-  const recentAppts = await db.select({
-    id: appointmentsTable.id, status: appointmentsTable.status, createdAt: appointmentsTable.createdAt,
-  }).from(appointmentsTable).orderBy(appointmentsTable.createdAt).limit(limit);
-
-  const recentUsers = await db.select({
-    id: usersTable.id, name: usersTable.name, role: usersTable.role, createdAt: usersTable.createdAt,
-  }).from(usersTable).orderBy(usersTable.createdAt).limit(limit);
-
-  const recentInvoices = await db.select({
-    id: invoicesTable.id, status: invoicesTable.status, paidAt: invoicesTable.paidAt, issuedAt: invoicesTable.issuedAt,
-  }).from(invoicesTable).where(eq(invoicesTable.status, "paid")).orderBy(invoicesTable.paidAt).limit(limit);
+  const recentAppts = await Appointment.find({}).sort({ createdAt: 1 }).limit(limit).lean();
+  const recentUsers = await User.find({}).sort({ createdAt: 1 }).limit(limit).lean();
+  const recentInvoices = await Invoice.find({ status: "paid" }).sort({ paidAt: 1 }).limit(limit).lean();
 
   const activities = [
-    ...recentAppts.map(a => ({
-      id: `appt-${a.id}`,
+    ...recentAppts.map((a: any) => ({
+      id: `appt-${a._id}`,
       type: "appointment_created",
-      title: `Appointment #${a.id}`,
+      title: `Appointment #${a._id}`,
       description: `Appointment scheduled (${a.status})`,
       createdAt: a.createdAt,
     })),
-    ...recentUsers.map(u => ({
-      id: `user-${u.id}`,
+    ...recentUsers.map((u: any) => ({
+      id: `user-${u._id}`,
       type: "user_registered",
       title: `New ${u.role} registered`,
       description: `${u.name} joined as ${u.role}`,
       createdAt: u.createdAt,
     })),
-    ...recentInvoices.map(i => ({
-      id: `inv-${i.id}`,
+    ...recentInvoices.map((i: any) => ({
+      id: `inv-${i._id}`,
       type: "invoice_paid",
-      title: `Invoice #${i.id} paid`,
+      title: `Invoice #${i._id} paid`,
       description: `Invoice was marked as paid`,
       createdAt: i.paidAt || i.issuedAt,
     })),

@@ -1,116 +1,45 @@
 import bcrypt from "bcryptjs";
-import { db, usersTable, doctorsTable, patientsTable, appointmentsTable, medicalRecordsTable, prescriptionsTable, medicinesTable, invoicesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import {
+  connectDB, mongoose,
+  User, Doctor, Patient, Appointment, MedicalRecord, Prescription, Medicine, Invoice,
+} from "@workspace/db";
 
 async function seed() {
+  console.log("Connecting to MongoDB...");
+  await connectDB();
   console.log("Seeding database...");
 
-  // Hash for "demo1234"
   const hash = await bcrypt.hash("demo1234", 10);
 
   // ---- USERS ----
-  const [adminUser] = await db.insert(usersTable).values({
-    name: "System Administrator",
-    email: "admin@hms.demo",
-    passwordHash: hash,
-    role: "admin",
-    phone: "+1-555-000-0001",
-    status: "active",
-  }).onConflictDoNothing().returning();
+  async function getOrCreateUser(values: { name: string; email: string; role: "admin" | "doctor" | "patient"; phone: string }) {
+    let user = await User.findOne({ email: values.email });
+    if (user) return user;
+    user = await User.create({ ...values, passwordHash: hash, status: "active" });
+    return user;
+  }
 
-  const [drJamesUser] = await db.insert(usersTable).values({
-    name: "Dr. James Carter",
-    email: "dr.james@hms.demo",
-    passwordHash: hash,
-    role: "doctor",
-    phone: "+1-555-100-0001",
-    status: "active",
-  }).onConflictDoNothing().returning();
-
-  const [drSarahUser] = await db.insert(usersTable).values({
-    name: "Dr. Sarah Patel",
-    email: "dr.sarah@hms.demo",
-    passwordHash: hash,
-    role: "doctor",
-    phone: "+1-555-100-0002",
-    status: "active",
-  }).onConflictDoNothing().returning();
-
-  const [drMarcusUser] = await db.insert(usersTable).values({
-    name: "Dr. Marcus Chen",
-    email: "dr.marcus@hms.demo",
-    passwordHash: hash,
-    role: "doctor",
-    phone: "+1-555-100-0003",
-    status: "active",
-  }).onConflictDoNothing().returning();
-
-  const [aliceUser] = await db.insert(usersTable).values({
-    name: "Alice Johnson",
-    email: "alice@hms.demo",
-    passwordHash: hash,
-    role: "patient",
-    phone: "+1-555-200-0001",
-    status: "active",
-  }).onConflictDoNothing().returning();
-
-  const [bobUser] = await db.insert(usersTable).values({
-    name: "Bob Williams",
-    email: "bob@hms.demo",
-    passwordHash: hash,
-    role: "patient",
-    phone: "+1-555-200-0002",
-    status: "active",
-  }).onConflictDoNothing().returning();
-
-  const [carolUser] = await db.insert(usersTable).values({
-    name: "Carol Davis",
-    email: "carol@hms.demo",
-    passwordHash: hash,
-    role: "patient",
-    phone: "+1-555-200-0003",
-    status: "active",
-  }).onConflictDoNothing().returning();
-
-  const [davidUser] = await db.insert(usersTable).values({
-    name: "David Miller",
-    email: "david@hms.demo",
-    passwordHash: hash,
-    role: "patient",
-    phone: "+1-555-200-0004",
-    status: "active",
-  }).onConflictDoNothing().returning();
-
-  const [emilyUser] = await db.insert(usersTable).values({
-    name: "Emily Brown",
-    email: "emily@hms.demo",
-    passwordHash: hash,
-    role: "patient",
-    phone: "+1-555-200-0005",
-    status: "active",
-  }).onConflictDoNothing().returning();
+  const admin = await getOrCreateUser({ name: "System Administrator", email: "admin@hms.demo", role: "admin", phone: "+1-555-000-0001" });
+  const drJamesUser = await getOrCreateUser({ name: "Dr. James Carter", email: "dr.james@hms.demo", role: "doctor", phone: "+1-555-100-0001" });
+  const drSarahUser = await getOrCreateUser({ name: "Dr. Sarah Patel", email: "dr.sarah@hms.demo", role: "doctor", phone: "+1-555-100-0002" });
+  const drMarcusUser = await getOrCreateUser({ name: "Dr. Marcus Chen", email: "dr.marcus@hms.demo", role: "doctor", phone: "+1-555-100-0003" });
+  const aliceUser = await getOrCreateUser({ name: "Alice Johnson", email: "alice@hms.demo", role: "patient", phone: "+1-555-200-0001" });
+  const bobUser = await getOrCreateUser({ name: "Bob Williams", email: "bob@hms.demo", role: "patient", phone: "+1-555-200-0002" });
+  const carolUser = await getOrCreateUser({ name: "Carol Davis", email: "carol@hms.demo", role: "patient", phone: "+1-555-200-0003" });
+  const davidUser = await getOrCreateUser({ name: "David Miller", email: "david@hms.demo", role: "patient", phone: "+1-555-200-0004" });
+  const emilyUser = await getOrCreateUser({ name: "Emily Brown", email: "emily@hms.demo", role: "patient", phone: "+1-555-200-0005" });
 
   console.log("Users seeded.");
 
   // ---- DOCTORS ----
-  const getOrCreate = async (table: typeof doctorsTable, userId: number | undefined, values: typeof doctorsTable.$inferInsert) => {
-    if (!userId) {
-      const [existing] = await db.select().from(table).where(eq(table.userId, values.userId));
-      return existing;
-    }
-    const [existing] = await db.select().from(table).where(eq(table.userId, userId));
-    if (existing) return existing;
-    const [created] = await db.insert(table).values(values).returning();
-    return created;
-  };
+  async function getOrCreateDoctor(userId: number, values: any) {
+    let doc = await Doctor.findOne({ userId });
+    if (doc) return doc;
+    doc = await Doctor.create({ userId, ...values });
+    return doc;
+  }
 
-  // Get actual user IDs
-  const [jamesActual] = await db.select().from(usersTable).where(eq(usersTable.email, "dr.james@hms.demo"));
-  const [sarahActual] = await db.select().from(usersTable).where(eq(usersTable.email, "dr.sarah@hms.demo"));
-  const [marcusActual] = await db.select().from(usersTable).where(eq(usersTable.email, "dr.marcus@hms.demo"));
-
-  const james = await getOrCreate(doctorsTable, jamesActual?.id, {
-    userId: jamesActual!.id,
+  const james = await getOrCreateDoctor(drJamesUser._id, {
     specialty: "Cardiology",
     qualifications: "MD, FACC, Board Certified Cardiologist",
     yearsExperience: 15,
@@ -121,8 +50,7 @@ async function seed() {
     availableHours: "09:00-17:00",
   });
 
-  const sarah = await getOrCreate(doctorsTable, sarahActual?.id, {
-    userId: sarahActual!.id,
+  const sarah = await getOrCreateDoctor(drSarahUser._id, {
     specialty: "Pediatrics",
     qualifications: "MD, FAAP, Pediatric Emergency Medicine",
     yearsExperience: 10,
@@ -133,8 +61,7 @@ async function seed() {
     availableHours: "08:00-16:00",
   });
 
-  const marcus = await getOrCreate(doctorsTable, marcusActual?.id, {
-    userId: marcusActual!.id,
+  const marcus = await getOrCreateDoctor(drMarcusUser._id, {
     specialty: "General Medicine",
     qualifications: "MD, Internal Medicine, Primary Care",
     yearsExperience: 8,
@@ -148,63 +75,47 @@ async function seed() {
   console.log("Doctors seeded.");
 
   // ---- PATIENTS ----
-  const getOrCreatePatient = async (userId: number, values: Omit<typeof patientsTable.$inferInsert, "userId">) => {
-    const [existing] = await db.select().from(patientsTable).where(eq(patientsTable.userId, userId));
-    if (existing) return existing;
-    const [created] = await db.insert(patientsTable).values({ userId, ...values }).returning();
-    return created;
-  };
+  async function getOrCreatePatient(userId: number, values: any) {
+    let pat = await Patient.findOne({ userId });
+    if (pat) return pat;
+    pat = await Patient.create({ userId, ...values });
+    return pat;
+  }
 
-  const [aliceActual] = await db.select().from(usersTable).where(eq(usersTable.email, "alice@hms.demo"));
-  const [bobActual] = await db.select().from(usersTable).where(eq(usersTable.email, "bob@hms.demo"));
-  const [carolActual] = await db.select().from(usersTable).where(eq(usersTable.email, "carol@hms.demo"));
-  const [davidActual] = await db.select().from(usersTable).where(eq(usersTable.email, "david@hms.demo"));
-  const [emilyActual] = await db.select().from(usersTable).where(eq(usersTable.email, "emily@hms.demo"));
-
-  const alice = await getOrCreatePatient(aliceActual!.id, {
-    dateOfBirth: "1988-05-15",
-    gender: "female",
-    bloodGroup: "A+",
+  const alice = await getOrCreatePatient(aliceUser._id, {
+    dateOfBirth: "1988-05-15", gender: "female", bloodGroup: "A+",
     address: "123 Maple Street, Springfield, IL 62701",
     emergencyContact: "John Johnson: +1-555-300-0001",
     allergies: "Penicillin",
     medicalHistory: "Hypertension (diagnosed 2019), managed with medication",
   });
 
-  const bob = await getOrCreatePatient(bobActual!.id, {
-    dateOfBirth: "1975-09-22",
-    gender: "male",
-    bloodGroup: "O+",
+  const bob = await getOrCreatePatient(bobUser._id, {
+    dateOfBirth: "1975-09-22", gender: "male", bloodGroup: "O+",
     address: "456 Oak Avenue, Springfield, IL 62702",
     emergencyContact: "Mary Williams: +1-555-300-0002",
     allergies: "None",
     medicalHistory: "Type 2 Diabetes (diagnosed 2018), controlled with diet and metformin",
   });
 
-  const carol = await getOrCreatePatient(carolActual!.id, {
-    dateOfBirth: "1992-03-08",
-    gender: "female",
-    bloodGroup: "B+",
+  const carol = await getOrCreatePatient(carolUser._id, {
+    dateOfBirth: "1992-03-08", gender: "female", bloodGroup: "B+",
     address: "789 Pine Road, Springfield, IL 62703",
     emergencyContact: "Tom Davis: +1-555-300-0003",
     allergies: "Sulfa drugs, Aspirin",
     medicalHistory: "Asthma (childhood onset), seasonal allergies",
   });
 
-  const david = await getOrCreatePatient(davidActual!.id, {
-    dateOfBirth: "1965-11-30",
-    gender: "male",
-    bloodGroup: "AB-",
+  const david = await getOrCreatePatient(davidUser._id, {
+    dateOfBirth: "1965-11-30", gender: "male", bloodGroup: "AB-",
     address: "321 Elm Street, Springfield, IL 62704",
     emergencyContact: "Susan Miller: +1-555-300-0004",
     allergies: "Latex",
     medicalHistory: "Coronary artery disease, Hyperlipidemia",
   });
 
-  const emily = await getOrCreatePatient(emilyActual!.id, {
-    dateOfBirth: "2000-07-14",
-    gender: "female",
-    bloodGroup: "O-",
+  const emily = await getOrCreatePatient(emilyUser._id, {
+    dateOfBirth: "2000-07-14", gender: "female", bloodGroup: "O-",
     address: "654 Birch Lane, Springfield, IL 62705",
     emergencyContact: "Robert Brown: +1-555-300-0005",
     allergies: "None known",
@@ -229,13 +140,9 @@ async function seed() {
 
   const medicineIds: number[] = [];
   for (const med of medicineSeed) {
-    const [existing] = await db.select().from(medicinesTable).where(eq(medicinesTable.name, med.name));
-    if (existing) {
-      medicineIds.push(existing.id);
-    } else {
-      const [created] = await db.insert(medicinesTable).values(med).returning();
-      medicineIds.push(created.id);
-    }
+    let existing = await Medicine.findOne({ name: med.name });
+    if (!existing) existing = await Medicine.create(med);
+    medicineIds.push(existing._id);
   }
 
   console.log("Medicines seeded.");
@@ -248,43 +155,46 @@ async function seed() {
   const lastWeek = new Date(now.getTime() - 7 * 86400000);
 
   const appointmentSeed = [
-    { patientId: alice!.id, doctorId: james!.id, scheduledAt: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0), status: "confirmed" as const, reason: "Regular cardiac checkup" },
-    { patientId: bob!.id, doctorId: marcus!.id, scheduledAt: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10, 30), status: "pending" as const, reason: "Diabetes follow-up" },
-    { patientId: carol!.id, doctorId: sarah!.id, scheduledAt: new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 11, 0), status: "confirmed" as const, reason: "Annual pediatric checkup" },
-    { patientId: david!.id, doctorId: james!.id, scheduledAt: new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 14, 0), status: "pending" as const, reason: "Chest pain evaluation" },
-    { patientId: emily!.id, doctorId: marcus!.id, scheduledAt: new Date(nextWeek.getFullYear(), nextWeek.getMonth(), nextWeek.getDate(), 9, 30), status: "pending" as const, reason: "General health checkup" },
-    { patientId: alice!.id, doctorId: james!.id, scheduledAt: new Date(lastWeek.getFullYear(), lastWeek.getMonth(), lastWeek.getDate(), 10, 0), status: "completed" as const, reason: "Echocardiogram follow-up", notes: "Good progress. Continue medication. Schedule stress test in 3 months." },
-    { patientId: bob!.id, doctorId: marcus!.id, scheduledAt: new Date(lastWeek.getFullYear(), lastWeek.getMonth(), lastWeek.getDate(), 11, 0), status: "completed" as const, reason: "Blood glucose monitoring", notes: "HbA1c improved to 7.1%. Continue current regimen." },
-    { patientId: carol!.id, doctorId: sarah!.id, scheduledAt: new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 9, 0), status: "cancelled" as const, reason: "Asthma attack follow-up" },
+    { patientId: alice._id, doctorId: james._id, scheduledAt: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0), status: "confirmed" as const, reason: "Regular cardiac checkup" },
+    { patientId: bob._id, doctorId: marcus._id, scheduledAt: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10, 30), status: "pending" as const, reason: "Diabetes follow-up" },
+    { patientId: carol._id, doctorId: sarah._id, scheduledAt: new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 11, 0), status: "confirmed" as const, reason: "Annual pediatric checkup" },
+    { patientId: david._id, doctorId: james._id, scheduledAt: new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 14, 0), status: "pending" as const, reason: "Chest pain evaluation" },
+    { patientId: emily._id, doctorId: marcus._id, scheduledAt: new Date(nextWeek.getFullYear(), nextWeek.getMonth(), nextWeek.getDate(), 9, 30), status: "pending" as const, reason: "General health checkup" },
+    { patientId: alice._id, doctorId: james._id, scheduledAt: new Date(lastWeek.getFullYear(), lastWeek.getMonth(), lastWeek.getDate(), 10, 0), status: "completed" as const, reason: "Echocardiogram follow-up", notes: "Good progress. Continue medication. Schedule stress test in 3 months." },
+    { patientId: bob._id, doctorId: marcus._id, scheduledAt: new Date(lastWeek.getFullYear(), lastWeek.getMonth(), lastWeek.getDate(), 11, 0), status: "completed" as const, reason: "Blood glucose monitoring", notes: "HbA1c improved to 7.1%. Continue current regimen." },
+    { patientId: carol._id, doctorId: sarah._id, scheduledAt: new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 9, 0), status: "cancelled" as const, reason: "Asthma attack follow-up" },
   ];
 
   const apptIds: number[] = [];
-  const existingAppts = await db.select().from(appointmentsTable).where(eq(appointmentsTable.patientId, alice!.id));
+  const existingAppts = await Appointment.find({ patientId: alice._id });
   if (existingAppts.length === 0) {
     for (const appt of appointmentSeed) {
-      const [created] = await db.insert(appointmentsTable).values(appt).returning();
-      apptIds.push(created.id);
+      const created = await Appointment.create(appt);
+      apptIds.push(created._id);
     }
   } else {
-    apptIds.push(...existingAppts.map(a => a.id));
+    apptIds.push(...existingAppts.map(a => a._id));
+    // Continue building list from other appointments
+    const others = await Appointment.find({ patientId: { $ne: alice._id } });
+    apptIds.push(...others.map(a => a._id));
   }
 
   console.log("Appointments seeded.");
 
   // ---- MEDICAL RECORDS ----
-  const existingRecords = await db.select().from(medicalRecordsTable).where(eq(medicalRecordsTable.patientId, alice!.id));
+  const existingRecords = await MedicalRecord.find({ patientId: alice._id });
   if (existingRecords.length === 0 && apptIds.length >= 6) {
-    await db.insert(medicalRecordsTable).values([
+    await MedicalRecord.create([
       {
-        patientId: alice!.id,
-        doctorId: james!.id,
+        patientId: alice._id,
+        doctorId: james._id,
         appointmentId: apptIds[5],
         diagnosis: "Hypertensive Heart Disease - Stable",
         treatmentPlan: "Continue Lisinopril 10mg daily. Restrict sodium intake. 30 minutes of moderate exercise daily. Follow-up echocardiogram in 3 months.",
       },
       {
-        patientId: bob!.id,
-        doctorId: marcus!.id,
+        patientId: bob._id,
+        doctorId: marcus._id,
         appointmentId: apptIds[6],
         diagnosis: "Type 2 Diabetes Mellitus - Improving Control",
         treatmentPlan: "Continue Metformin 500mg twice daily. HbA1c goal < 7.0%. Low glycemic index diet. Blood glucose monitoring twice daily.",
@@ -295,12 +205,12 @@ async function seed() {
   console.log("Medical records seeded.");
 
   // ---- PRESCRIPTIONS ----
-  const existingRx = await db.select().from(prescriptionsTable).where(eq(prescriptionsTable.patientId, alice!.id));
+  const existingRx = await Prescription.find({ patientId: alice._id });
   if (existingRx.length === 0 && apptIds.length >= 6) {
-    await db.insert(prescriptionsTable).values([
+    await Prescription.create([
       {
-        patientId: alice!.id,
-        doctorId: james!.id,
+        patientId: alice._id,
+        doctorId: james._id,
         appointmentId: apptIds[5],
         medicines: [
           { medicineId: medicineIds[0], medicineName: "Lisinopril", dosage: "10mg", frequency: "Once daily", duration: "90 days" },
@@ -309,8 +219,8 @@ async function seed() {
         instructions: "Take Lisinopril in the morning with or without food. Take Aspirin with food to reduce stomach upset. Monitor blood pressure daily.",
       },
       {
-        patientId: bob!.id,
-        doctorId: marcus!.id,
+        patientId: bob._id,
+        doctorId: marcus._id,
         appointmentId: apptIds[6],
         medicines: [
           { medicineId: medicineIds[1], medicineName: "Metformin 500mg", dosage: "500mg", frequency: "Twice daily with meals", duration: "90 days" },
@@ -323,48 +233,42 @@ async function seed() {
   console.log("Prescriptions seeded.");
 
   // ---- INVOICES ----
-  const existingInvoices = await db.select().from(invoicesTable).where(eq(invoicesTable.patientId, alice!.id));
+  const existingInvoices = await Invoice.find({ patientId: alice._id });
   if (existingInvoices.length === 0 && apptIds.length >= 6) {
     const twoWeeksAgo = new Date(now.getTime() - 14 * 86400000);
-    await db.insert(invoicesTable).values([
+    await Invoice.create([
       {
-        patientId: alice!.id,
+        patientId: alice._id,
         appointmentId: apptIds[5],
         lineItems: [
           { description: "Cardiology Consultation", quantity: 1, unitPrice: 250, total: 250 },
           { description: "Echocardiogram", quantity: 1, unitPrice: 380, total: 380 },
         ],
-        subtotal: "630",
-        tax: "63",
-        total: "693",
+        subtotal: "630", tax: "63", total: "693",
         status: "paid",
         issuedAt: twoWeeksAgo,
         paidAt: new Date(twoWeeksAgo.getTime() + 86400000),
       },
       {
-        patientId: bob!.id,
+        patientId: bob._id,
         appointmentId: apptIds[6],
         lineItems: [
           { description: "General Medicine Consultation", quantity: 1, unitPrice: 150, total: 150 },
           { description: "HbA1c Blood Test", quantity: 1, unitPrice: 85, total: 85 },
         ],
-        subtotal: "235",
-        tax: "23.50",
-        total: "258.50",
+        subtotal: "235", tax: "23.50", total: "258.50",
         status: "unpaid",
         issuedAt: new Date(lastWeek.getTime()),
       },
       {
-        patientId: david!.id,
+        patientId: david._id,
         appointmentId: null,
         lineItems: [
           { description: "Cardiology Consultation", quantity: 1, unitPrice: 250, total: 250 },
           { description: "Stress Echocardiogram", quantity: 1, unitPrice: 450, total: 450 },
           { description: "Cardiac Monitoring (24hr)", quantity: 1, unitPrice: 200, total: 200 },
         ],
-        subtotal: "900",
-        tax: "90",
-        total: "990",
+        subtotal: "900", tax: "90", total: "990",
         status: "unpaid",
         issuedAt: new Date(now.getTime() - 3 * 86400000),
       },
@@ -373,6 +277,7 @@ async function seed() {
 
   console.log("Invoices seeded.");
   console.log("Seed complete!");
+  await mongoose.disconnect();
 }
 
 seed().catch(e => {

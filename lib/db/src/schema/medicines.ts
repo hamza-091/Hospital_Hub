@@ -1,18 +1,38 @@
-import { pgTable, text, serial, integer, numeric } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
+import mongoose, { Schema, Model, HydratedDocument } from "mongoose";
+import { getNextId } from "./counter";
 
-export const medicinesTable = pgTable("medicines", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  genericName: text("generic_name"),
-  manufacturer: text("manufacturer"),
-  price: numeric("price", { precision: 10, scale: 2 }),
-  stockQuantity: integer("stock_quantity").notNull().default(0),
-  expiryDate: text("expiry_date"),
-  category: text("category"),
+export interface IMedicine {
+  _id: number;
+  name: string;
+  genericName: string | null;
+  manufacturer: string | null;
+  price: string | null;
+  stockQuantity: number;
+  expiryDate: string | null;
+  category: string | null;
+}
+
+const medicineSchema = new Schema<IMedicine>(
+  {
+    _id: { type: Number },
+    name: { type: String, required: true },
+    genericName: { type: String, default: null },
+    manufacturer: { type: String, default: null },
+    price: { type: String, default: null },
+    stockQuantity: { type: Number, default: 0 },
+    expiryDate: { type: String, default: null },
+    category: { type: String, default: null },
+  },
+  { _id: false, versionKey: false, toJSON: { virtuals: true }, toObject: { virtuals: true } }
+);
+
+medicineSchema.virtual("id").get(function () { return this._id; });
+
+medicineSchema.pre("save", async function () {
+  if (this.isNew && this._id == null) this._id = await getNextId("medicines");
 });
 
-export const insertMedicineSchema = createInsertSchema(medicinesTable).omit({ id: true });
-export type InsertMedicine = z.infer<typeof insertMedicineSchema>;
-export type Medicine = typeof medicinesTable.$inferSelect;
+export const Medicine: Model<IMedicine> =
+  mongoose.models.Medicine || mongoose.model<IMedicine>("Medicine", medicineSchema);
+
+export type MedicineDoc = HydratedDocument<IMedicine>;

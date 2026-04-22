@@ -1,79 +1,53 @@
 import { Router, type IRouter } from "express";
-import { db, usersTable } from "@workspace/db";
-import { eq, ilike, and, or, SQL } from "drizzle-orm";
+import { User } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 import { UpdateUserBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
+function publicUser(u: any) {
+  if (!u) return null;
+  return {
+    id: u._id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    phone: u.phone,
+    status: u.status,
+    createdAt: u.createdAt,
+  };
+}
+
 router.get("/users", requireAuth, async (req, res): Promise<void> => {
   const { search, role, status } = req.query as { search?: string; role?: string; status?: string };
-  const conditions: SQL[] = [];
+  const filter: any = {};
   if (search) {
-    conditions.push(or(ilike(usersTable.name, `%${search}%`), ilike(usersTable.email, `%${search}%`))!);
+    const safe = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    filter.$or = [
+      { name: { $regex: safe, $options: "i" } },
+      { email: { $regex: safe, $options: "i" } },
+    ];
   }
-  if (role) conditions.push(eq(usersTable.role, role as "admin" | "doctor" | "patient"));
-  if (status) conditions.push(eq(usersTable.status, status as "active" | "suspended"));
-
-  const users = await db.select({
-    id: usersTable.id,
-    name: usersTable.name,
-    email: usersTable.email,
-    role: usersTable.role,
-    phone: usersTable.phone,
-    status: usersTable.status,
-    createdAt: usersTable.createdAt,
-  }).from(usersTable).where(conditions.length > 0 ? and(...conditions) : undefined);
-  res.json({ users });
+  if (role) filter.role = role;
+  if (status) filter.status = status;
+  const users = await User.find(filter).lean();
+  res.json({ users: users.map(publicUser) });
 });
 
 router.get("/users/:id", requireAuth, async (req, res): Promise<void> => {
-  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const id = parseInt(raw, 10);
-  const [user] = await db.select({
-    id: usersTable.id,
-    name: usersTable.name,
-    email: usersTable.email,
-    role: usersTable.role,
-    phone: usersTable.phone,
-    status: usersTable.status,
-    createdAt: usersTable.createdAt,
-  }).from(usersTable).where(eq(usersTable.id, id));
-  if (!user) {
-    res.status(404).json({ error: "User not found" });
-    return;
-  }
-  res.json(user);
+  const id = parseInt(req.params.id, 10);
+  const user = await User.findById(id).lean();
+  if (!user) { res.status(404).json({ error: "User not found" }); return; }
+  res.json(publicUser(user));
 });
 
 router.patch("/users/:id", requireAuth, async (req, res): Promise<void> => {
-  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const id = parseInt(raw, 10);
+  const id = parseInt(req.params.id, 10);
   const parsed = UpdateUserBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-  const updates: Partial<typeof usersTable.$inferInsert> = {};
-  if (parsed.data.name !== undefined) updates.name = parsed.data.name;
-  if (parsed.data.phone !== undefined) updates.phone = parsed.data.phone;
-  if (parsed.data.status !== undefined) updates.status = parsed.data.status as "active" | "suspended";
-  if (parsed.data.role !== undefined) updates.role = parsed.data.role as "admin" | "doctor" | "patient";
-
-  const [user] = await db.update(usersTable).set(updates).where(eq(usersTable.id, id)).returning({
-    id: usersTable.id,
-    name: usersTable.name,
-    email: usersTable.email,
-    role: usersTable.role,
-    phone: usersTable.phone,
-    status: usersTable.status,
-    createdAt: usersTable.createdAt,
-  });
-  if (!user) {
-    res.status(404).json({ error: "User not found" });
-    return;
-  }
-  res.json(user);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const user = await User.findByIdAndUpdate(id, parsed.data, { new: true }).lean();
+  if (!user) { res.status(404).json({ error: "User not found" }); return; }
+  res.json(publicUser(user));
 });
 
 export default router;

@@ -1,21 +1,43 @@
-import { pgTable, text, serial, timestamp, pgEnum } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
+import mongoose, { Schema, Model, HydratedDocument } from "mongoose";
+import { getNextId } from "./counter";
 
-export const userRoleEnum = pgEnum("user_role", ["admin", "doctor", "patient"]);
-export const userStatusEnum = pgEnum("user_status", ["active", "suspended"]);
+export type UserRole = "admin" | "doctor" | "patient";
+export type UserStatus = "active" | "suspended";
 
-export const usersTable = pgTable("users", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  email: text("email").notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
-  role: userRoleEnum("role").notNull().default("patient"),
-  phone: text("phone"),
-  status: userStatusEnum("status").notNull().default("active"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+export interface IUser {
+  _id: number;
+  name: string;
+  email: string;
+  passwordHash: string;
+  role: UserRole;
+  phone: string | null;
+  status: UserStatus;
+  createdAt: Date;
+}
+
+const userSchema = new Schema<IUser>(
+  {
+    _id: { type: Number },
+    name: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
+    passwordHash: { type: String, required: true },
+    role: { type: String, enum: ["admin", "doctor", "patient"], default: "patient" },
+    phone: { type: String, default: null },
+    status: { type: String, enum: ["active", "suspended"], default: "active" },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: false, versionKey: false, toJSON: { virtuals: true }, toObject: { virtuals: true } }
+);
+
+userSchema.virtual("id").get(function () { return this._id; });
+
+userSchema.pre("save", async function () {
+  if (this.isNew && this._id == null) {
+    this._id = await getNextId("users");
+  }
 });
 
-export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true });
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof usersTable.$inferSelect;
+export const User: Model<IUser> =
+  mongoose.models.User || mongoose.model<IUser>("User", userSchema);
+
+export type UserDoc = HydratedDocument<IUser>;

@@ -1,51 +1,48 @@
 import { Router, type IRouter } from "express";
-import { db, usersTable, doctorsTable, appointmentsTable } from "@workspace/db";
-import { eq, ilike, and, or, SQL, gte, lt } from "drizzle-orm";
+import { User, Doctor, Appointment } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 import { CreateDoctorBody, UpdateDoctorBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
-async function buildDoctorWithUser(doctor: typeof doctorsTable.$inferSelect) {
-  const [user] = await db.select({
-    id: usersTable.id,
-    name: usersTable.name,
-    email: usersTable.email,
-    role: usersTable.role,
-    phone: usersTable.phone,
-    status: usersTable.status,
-    createdAt: usersTable.createdAt,
-  }).from(usersTable).where(eq(usersTable.id, doctor.userId));
-  return { ...doctor, user };
+function publicUser(u: any) {
+  if (!u) return null;
+  return { id: u._id, name: u.name, email: u.email, role: u.role, phone: u.phone, status: u.status, createdAt: u.createdAt };
+}
+
+async function buildDoctorWithUser(doctor: any) {
+  const u = await User.findById(doctor.userId).lean();
+  return { ...doctor, id: doctor._id, user: publicUser(u) };
 }
 
 router.get("/doctors", async (req, res): Promise<void> => {
   const { specialty, search } = req.query as { specialty?: string; search?: string };
-  const conditions: SQL[] = [];
-  if (specialty) conditions.push(ilike(doctorsTable.specialty, `%${specialty}%`));
-
-  let doctors = await db.select().from(doctorsTable).where(conditions.length > 0 ? and(...conditions) : undefined);
-
+  const filter: any = {};
+  if (specialty) {
+    const safeSpec = specialty.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    filter.specialty = { $regex: safeSpec, $options: "i" };
+  }
+  let doctors = await Doctor.find(filter).lean();
   if (search) {
-    const users = await db.select().from(usersTable).where(
-      or(ilike(usersTable.name, `%${search}%`), ilike(usersTable.email, `%${search}%`))
-    );
-    const userIds = new Set(users.map(u => u.id));
+    const safe = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const users = await User.find({
+      $or: [
+        { name: { $regex: safe, $options: "i" } },
+        { email: { $regex: safe, $options: "i" } },
+      ],
+    }).lean();
+    const userIds = new Set(users.map((u: any) => u._id));
     doctors = doctors.filter(d => userIds.has(d.userId));
   }
-
   const result = await Promise.all(doctors.map(buildDoctorWithUser));
   res.json({ doctors: result });
 });
 
 router.post("/doctors", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateDoctorBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const data = parsed.data;
-  const [doctor] = await db.insert(doctorsTable).values({
+  const doctor = await Doctor.create({
     userId: data.userId,
     specialty: data.specialty,
     qualifications: data.qualifications ?? null,
@@ -55,100 +52,50 @@ router.post("/doctors", requireAuth, async (req, res): Promise<void> => {
     photoUrl: data.photoUrl ?? null,
     availableDays: data.availableDays ?? null,
     availableHours: data.availableHours ?? null,
-  }).returning();
-  res.status(201).json(await buildDoctorWithUser(doctor));
+  });
+  res.status(201).json(await buildDoctorWithUser(doctor.toObject()));
 });
 
 router.get("/doctors/:id", async (req, res): Promise<void> => {
-  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const id = parseInt(raw, 10);
-  const [doctor] = await db.select().from(doctorsTable).where(eq(doctorsTable.id, id));
-  if (!doctor) {
-    res.status(404).json({ error: "Doctor not found" });
-    return;
-  }
+  const id = parseInt(req.params.id, 10);
+  const doctor = await Doctor.findById(id).lean();
+  if (!doctor) { res.status(404).json({ error: "Doctor not found" }); return; }
   res.json(await buildDoctorWithUser(doctor));
 });
 
 router.patch("/doctors/:id", requireAuth, async (req, res): Promise<void> => {
-  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const id = parseInt(raw, 10);
+  const id = parseInt(req.params.id, 10);
   const parsed = UpdateDoctorBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-  const data = parsed.data;
-  const updates: Partial<typeof doctorsTable.$inferInsert> = {};
-  if (data.specialty !== undefined) updates.specialty = data.specialty;
-  if (data.qualifications !== undefined) updates.qualifications = data.qualifications;
-  if (data.yearsExperience !== undefined) updates.yearsExperience = data.yearsExperience;
-  if (data.consultationFee !== undefined) updates.consultationFee = data.consultationFee != null ? String(data.consultationFee) : null;
-  if (data.bio !== undefined) updates.bio = data.bio;
-  if (data.photoUrl !== undefined) updates.photoUrl = data.photoUrl;
-  if (data.availableDays !== undefined) updates.availableDays = data.availableDays;
-  if (data.availableHours !== undefined) updates.availableHours = data.availableHours;
-
-  const [doctor] = await db.update(doctorsTable).set(updates).where(eq(doctorsTable.id, id)).returning();
-  if (!doctor) {
-    res.status(404).json({ error: "Doctor not found" });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const update: any = { ...parsed.data };
+  if (update.consultationFee != null) update.consultationFee = String(update.consultationFee);
+  const doctor = await Doctor.findByIdAndUpdate(id, update, { new: true }).lean();
+  if (!doctor) { res.status(404).json({ error: "Doctor not found" }); return; }
   res.json(await buildDoctorWithUser(doctor));
 });
 
-router.get("/doctors/:id/slots", async (req, res): Promise<void> => {
-  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const doctorId = parseInt(raw, 10);
-  const { date } = req.query as { date?: string };
+router.get("/doctors/:id/availability", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  const date = req.query.date as string;
+  if (!date) { res.status(400).json({ error: "date required" }); return; }
+  const doctor = await Doctor.findById(id).lean();
+  if (!doctor) { res.status(404).json({ error: "Doctor not found" }); return; }
 
-  if (!date) {
-    res.status(400).json({ error: "date query parameter required" });
-    return;
-  }
+  const dayStart = new Date(`${date}T00:00:00.000Z`);
+  const dayEnd = new Date(`${date}T23:59:59.999Z`);
+  const booked = await Appointment.find({
+    doctorId: id,
+    scheduledAt: { $gte: dayStart, $lte: dayEnd },
+    status: { $ne: "cancelled" },
+  }).lean();
 
-  const [doctor] = await db.select().from(doctorsTable).where(eq(doctorsTable.id, doctorId));
-  if (!doctor) {
-    res.status(404).json({ error: "Doctor not found" });
-    return;
-  }
-
-  const dayStart = new Date(`${date}T00:00:00Z`);
-  const dayEnd = new Date(`${date}T23:59:59Z`);
-
-  const booked = await db.select({ scheduledAt: appointmentsTable.scheduledAt })
-    .from(appointmentsTable)
-    .where(
-      and(
-        eq(appointmentsTable.doctorId, doctorId),
-        gte(appointmentsTable.scheduledAt, dayStart),
-        lt(appointmentsTable.scheduledAt, dayEnd),
-        eq(appointmentsTable.status, "pending")
-      )
-    );
-
-  const hoursStr = doctor.availableHours || "09:00-17:00";
-  const [startStr, endStr] = hoursStr.split("-");
-  const [startHour] = (startStr || "09:00").split(":").map(Number);
-  const [endHour] = (endStr || "17:00").split(":").map(Number);
-
-  const allSlots: string[] = [];
-  for (let h = startHour; h < endHour; h++) {
-    allSlots.push(`${String(h).padStart(2, "0")}:00`);
-    allSlots.push(`${String(h).padStart(2, "0")}:30`);
-  }
-
-  const bookedTimes = new Set(
-    booked.map(b => {
-      const d = new Date(b.scheduledAt);
-      return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
-    })
-  );
-
+  const allSlots = ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30"];
+  const bookedTimes = new Set(booked.map(b => {
+    const d = new Date(b.scheduledAt);
+    return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+  }));
   const availableSlots = allSlots.filter(s => !bookedTimes.has(s));
-  const bookedSlots = allSlots.filter(s => bookedTimes.has(s));
-
-  res.json({ date, doctorId, availableSlots, bookedSlots });
+  res.json({ date, doctorId: id, availableSlots, bookedSlots: Array.from(bookedTimes) });
 });
 
 export default router;

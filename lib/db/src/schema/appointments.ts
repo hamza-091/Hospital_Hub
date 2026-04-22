@@ -1,27 +1,40 @@
-import { pgTable, text, serial, integer, timestamp, pgEnum } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
-import { doctorsTable } from "./doctors";
-import { patientsTable } from "./patients";
+import mongoose, { Schema, Model, HydratedDocument } from "mongoose";
+import { getNextId } from "./counter";
 
-export const appointmentStatusEnum = pgEnum("appointment_status", [
-  "pending",
-  "confirmed",
-  "completed",
-  "cancelled",
-]);
+export type AppointmentStatus = "pending" | "confirmed" | "completed" | "cancelled";
 
-export const appointmentsTable = pgTable("appointments", {
-  id: serial("id").primaryKey(),
-  patientId: integer("patient_id").notNull().references(() => patientsTable.id, { onDelete: "cascade" }),
-  doctorId: integer("doctor_id").notNull().references(() => doctorsTable.id, { onDelete: "cascade" }),
-  scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
-  status: appointmentStatusEnum("status").notNull().default("pending"),
-  reason: text("reason"),
-  notes: text("notes"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+export interface IAppointment {
+  _id: number;
+  patientId: number;
+  doctorId: number;
+  scheduledAt: Date;
+  status: AppointmentStatus;
+  reason: string | null;
+  notes: string | null;
+  createdAt: Date;
+}
+
+const appointmentSchema = new Schema<IAppointment>(
+  {
+    _id: { type: Number },
+    patientId: { type: Number, required: true, index: true },
+    doctorId: { type: Number, required: true, index: true },
+    scheduledAt: { type: Date, required: true },
+    status: { type: String, enum: ["pending", "confirmed", "completed", "cancelled"], default: "pending" },
+    reason: { type: String, default: null },
+    notes: { type: String, default: null },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: false, versionKey: false, toJSON: { virtuals: true }, toObject: { virtuals: true } }
+);
+
+appointmentSchema.virtual("id").get(function () { return this._id; });
+
+appointmentSchema.pre("save", async function () {
+  if (this.isNew && this._id == null) this._id = await getNextId("appointments");
 });
 
-export const insertAppointmentSchema = createInsertSchema(appointmentsTable).omit({ id: true, createdAt: true });
-export type InsertAppointment = z.infer<typeof insertAppointmentSchema>;
-export type Appointment = typeof appointmentsTable.$inferSelect;
+export const Appointment: Model<IAppointment> =
+  mongoose.models.Appointment || mongoose.model<IAppointment>("Appointment", appointmentSchema);
+
+export type AppointmentDoc = HydratedDocument<IAppointment>;

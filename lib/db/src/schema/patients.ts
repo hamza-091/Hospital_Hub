@@ -1,20 +1,40 @@
-import { pgTable, text, serial, integer } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
-import { usersTable } from "./users";
+import mongoose, { Schema, Model, HydratedDocument } from "mongoose";
+import { getNextId } from "./counter";
 
-export const patientsTable = pgTable("patients", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
-  dateOfBirth: text("date_of_birth"),
-  gender: text("gender"),
-  bloodGroup: text("blood_group"),
-  address: text("address"),
-  emergencyContact: text("emergency_contact"),
-  allergies: text("allergies"),
-  medicalHistory: text("medical_history"),
+export interface IPatient {
+  _id: number;
+  userId: number;
+  dateOfBirth: string | null;
+  gender: string | null;
+  bloodGroup: string | null;
+  address: string | null;
+  emergencyContact: string | null;
+  allergies: string | null;
+  medicalHistory: string | null;
+}
+
+const patientSchema = new Schema<IPatient>(
+  {
+    _id: { type: Number },
+    userId: { type: Number, required: true, index: true },
+    dateOfBirth: { type: String, default: null },
+    gender: { type: String, default: null },
+    bloodGroup: { type: String, default: null },
+    address: { type: String, default: null },
+    emergencyContact: { type: String, default: null },
+    allergies: { type: String, default: null },
+    medicalHistory: { type: String, default: null },
+  },
+  { _id: false, versionKey: false, toJSON: { virtuals: true }, toObject: { virtuals: true } }
+);
+
+patientSchema.virtual("id").get(function () { return this._id; });
+
+patientSchema.pre("save", async function () {
+  if (this.isNew && this._id == null) this._id = await getNextId("patients");
 });
 
-export const insertPatientSchema = createInsertSchema(patientsTable).omit({ id: true });
-export type InsertPatient = z.infer<typeof insertPatientSchema>;
-export type Patient = typeof patientsTable.$inferSelect;
+export const Patient: Model<IPatient> =
+  mongoose.models.Patient || mongoose.model<IPatient>("Patient", patientSchema);
+
+export type PatientDoc = HydratedDocument<IPatient>;

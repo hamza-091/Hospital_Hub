@@ -1,21 +1,42 @@
-import { pgTable, text, serial, integer, numeric } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
-import { usersTable } from "./users";
+import mongoose, { Schema, Model, HydratedDocument } from "mongoose";
+import { getNextId } from "./counter";
 
-export const doctorsTable = pgTable("doctors", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
-  specialty: text("specialty").notNull(),
-  qualifications: text("qualifications"),
-  yearsExperience: integer("years_experience"),
-  consultationFee: numeric("consultation_fee", { precision: 10, scale: 2 }),
-  bio: text("bio"),
-  photoUrl: text("photo_url"),
-  availableDays: text("available_days"),
-  availableHours: text("available_hours"),
+export interface IDoctor {
+  _id: number;
+  userId: number;
+  specialty: string;
+  qualifications: string | null;
+  yearsExperience: number | null;
+  consultationFee: string | null;
+  bio: string | null;
+  photoUrl: string | null;
+  availableDays: string | null;
+  availableHours: string | null;
+}
+
+const doctorSchema = new Schema<IDoctor>(
+  {
+    _id: { type: Number },
+    userId: { type: Number, required: true, index: true },
+    specialty: { type: String, required: true },
+    qualifications: { type: String, default: null },
+    yearsExperience: { type: Number, default: null },
+    consultationFee: { type: String, default: null },
+    bio: { type: String, default: null },
+    photoUrl: { type: String, default: null },
+    availableDays: { type: String, default: null },
+    availableHours: { type: String, default: null },
+  },
+  { _id: false, versionKey: false, toJSON: { virtuals: true }, toObject: { virtuals: true } }
+);
+
+doctorSchema.virtual("id").get(function () { return this._id; });
+
+doctorSchema.pre("save", async function () {
+  if (this.isNew && this._id == null) this._id = await getNextId("doctors");
 });
 
-export const insertDoctorSchema = createInsertSchema(doctorsTable).omit({ id: true });
-export type InsertDoctor = z.infer<typeof insertDoctorSchema>;
-export type Doctor = typeof doctorsTable.$inferSelect;
+export const Doctor: Model<IDoctor> =
+  mongoose.models.Doctor || mongoose.model<IDoctor>("Doctor", doctorSchema);
+
+export type DoctorDoc = HydratedDocument<IDoctor>;

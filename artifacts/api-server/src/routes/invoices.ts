@@ -1,15 +1,19 @@
 import { Router, type IRouter } from "express";
-import { db, usersTable, invoicesTable, appointmentsTable, patientsTable } from "@workspace/db";
-import { eq, and, SQL } from "drizzle-orm";
+import { User, Invoice, Patient } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 import PDFDocument from "pdfkit";
 
 const router: IRouter = Router();
 
+function publicUser(u: any) {
+  if (!u) return null;
+  return { id: u._id, name: u.name, email: u.email, role: u.role, phone: u.phone, status: u.status, createdAt: u.createdAt };
+}
+
 function normalizeStatus(dbStatus: string): string {
   if (dbStatus === "unpaid") return "pending";
   if (dbStatus === "refunded") return "cancelled";
-  return dbStatus; // "paid"
+  return dbStatus;
 }
 
 function dbStatusFromApi(apiStatus: string): "unpaid" | "paid" | "refunded" {
@@ -18,18 +22,12 @@ function dbStatusFromApi(apiStatus: string): "unpaid" | "paid" | "refunded" {
   return "paid";
 }
 
-async function buildInvoiceWithDetails(invoice: typeof invoicesTable.$inferSelect) {
-  const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, invoice.patientId));
+async function buildInvoiceWithDetails(invoice: any) {
+  const patient = await Patient.findById(invoice.patientId).lean();
   let patientUser = null;
-  if (patient) {
-    const [u] = await db.select({
-      id: usersTable.id, name: usersTable.name, email: usersTable.email,
-      role: usersTable.role, phone: usersTable.phone, status: usersTable.status, createdAt: usersTable.createdAt
-    }).from(usersTable).where(eq(usersTable.id, patient.userId));
-    patientUser = u;
-  }
+  if (patient) patientUser = await User.findById(patient.userId).lean();
   return {
-    id: invoice.id,
+    id: invoice._id,
     patientId: invoice.patientId,
     appointmentId: invoice.appointmentId,
     invoiceDate: invoice.issuedAt,
@@ -44,35 +42,29 @@ async function buildInvoiceWithDetails(invoice: typeof invoicesTable.$inferSelec
     })),
     paidAt: invoice.paidAt,
     createdAt: invoice.issuedAt,
-    patient: patient ? { ...patient, user: patientUser } : null,
+    patient: patient ? { ...patient, id: patient._id, user: publicUser(patientUser) } : null,
   };
 }
 
 router.get("/invoices", requireAuth, async (req, res): Promise<void> => {
   const { patientId, status } = req.query as { patientId?: string; status?: string };
-  const conditions: SQL[] = [];
-  if (patientId) conditions.push(eq(invoicesTable.patientId, parseInt(patientId, 10)));
-  if (status) conditions.push(eq(invoicesTable.status, dbStatusFromApi(status)));
-
-  const invoices = await db.select().from(invoicesTable)
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(invoicesTable.issuedAt);
+  const filter: any = {};
+  if (patientId) filter.patientId = parseInt(patientId, 10);
+  if (status) filter.status = dbStatusFromApi(status);
+  const invoices = await Invoice.find(filter).sort({ issuedAt: 1 }).lean();
   const result = await Promise.all(invoices.map(buildInvoiceWithDetails));
   res.json({ invoices: result });
 });
 
 router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
   const { patientId, appointmentId, items, totalAmount } = req.body;
-  if (!patientId) {
-    res.status(400).json({ error: "patientId is required" });
-    return;
-  }
+  if (!patientId) { res.status(400).json({ error: "patientId is required" }); return; }
   const lineItems = items ?? [];
   const subtotal = lineItems.reduce((s: number, i: any) => s + (i.amount ?? 0), 0);
   const tax = subtotal * 0.1;
   const total = totalAmount ?? (subtotal + tax);
 
-  const [invoice] = await db.insert(invoicesTable).values({
+  const invoice = await Invoice.create({
     patientId,
     appointmentId: appointmentId ?? null,
     lineItems,
@@ -80,13 +72,13 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
     tax: String(tax),
     total: String(total),
     status: "unpaid",
-  }).returning();
-  res.status(201).json(await buildInvoiceWithDetails(invoice));
+  });
+  res.status(201).json(await buildInvoiceWithDetails(invoice.toObject()));
 });
 
 router.get("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id, 10);
-  const [invoice] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, id));
+  const invoice = await Invoice.findById(id).lean();
   if (!invoice) { res.status(404).json({ error: "Invoice not found" }); return; }
   res.json(await buildInvoiceWithDetails(invoice));
 });
@@ -94,19 +86,19 @@ router.get("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
 router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id, 10);
   const { status } = req.body;
-  const updates: Partial<typeof invoicesTable.$inferInsert> = {};
+  const updates: any = {};
   if (status !== undefined) {
     updates.status = dbStatusFromApi(status);
     if (updates.status === "paid") updates.paidAt = new Date();
   }
-  const [invoice] = await db.update(invoicesTable).set(updates).where(eq(invoicesTable.id, id)).returning();
+  const invoice = await Invoice.findByIdAndUpdate(id, updates, { new: true }).lean();
   if (!invoice) { res.status(404).json({ error: "Invoice not found" }); return; }
   res.json(await buildInvoiceWithDetails(invoice));
 });
 
 router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id, 10);
-  const [invoice] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, id));
+  const invoice = await Invoice.findById(id).lean();
   if (!invoice) { res.status(404).json({ error: "Invoice not found" }); return; }
   const details = await buildInvoiceWithDetails(invoice);
 

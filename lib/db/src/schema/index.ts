@@ -1,3 +1,4 @@
+export * from "./counter";
 export * from "./users";
 export * from "./doctors";
 export * from "./patients";
