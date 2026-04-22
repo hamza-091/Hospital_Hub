@@ -1,0 +1,74 @@
+Build a full-stack Hospital Management System (HMS) as a React + Vite web app with an Express API backend and PostgreSQL database. Mount the entire app at the path /hms/.
+
+Three user roles, each with their own login and dashboard: Admin, Doctor, Patient.
+
+Authentication: Email + password login with JWT tokens stored in the browser. Registration form lets a user sign up as Patient, Doctor, or Admin (admin signups should normally need approval, but for the demo allow self-registration). Provide three demo accounts seeded in the database — one per role — so anyone can click "Login as Doctor / Patient / Admin" buttons on the login page and instantly explore.
+
+Database tables (PostgreSQL via Drizzle ORM):
+
+users — id, name, email, password_hash, role (admin/doctor/patient), phone, created_at
+doctors — id, user_id, specialty, qualifications, years_experience, consultation_fee, bio, photo_url, available_days, available_hours
+patients — id, user_id, date_of_birth, gender, blood_group, address, emergency_contact, allergies, medical_history
+appointments — id, patient_id, doctor_id, scheduled_at, status (pending/confirmed/completed/cancelled), reason, notes
+medical_records — id, patient_id, doctor_id, appointment_id, diagnosis, treatment_plan, attached_file_urls, created_at
+prescriptions — id, patient_id, doctor_id, appointment_id, medicines (jsonb array of {medicine_id, dosage, frequency, duration}), instructions, created_at
+medicines — id, name, generic_name, manufacturer, price, stock_quantity, expiry_date, category
+invoices — id, patient_id, appointment_id, line_items (jsonb), subtotal, tax, total, status (unpaid/paid/refunded), issued_at, paid_at
+Pages and features:
+
+Public
+
+/login — email/password login + 3 demo-account quick-login buttons
+/register — Patient / Doctor / Admin signup with role-specific fields
+/ — landing/home with hospital branding
+Admin (/admin/*)
+
+Dashboard — totals (patients, doctors, appointments today, revenue this month), recent activity feed, appointments by status chart
+Users — searchable table of all users, ability to suspend/activate accounts and change roles
+Doctors — manage doctor profiles, specialties, fees, availability schedule
+Appointments — view all appointments across the hospital, filter by status/doctor/date
+Medicines — full CRUD for medicine inventory with stock alerts and expiry warnings
+Invoices — view all invoices, mark as paid, generate PDF download
+Doctor (/doctor/*)
+
+Dashboard — today's appointments, patients seen this week, pending records
+Appointments — upcoming and past, ability to confirm/complete/cancel and add notes
+Records — create medical records for patients tied to a completed appointment
+Prescriptions — create prescriptions selecting from medicines list, set dosage/frequency/duration
+Patient (/patient/*)
+
+Dashboard — upcoming appointments, recent prescriptions, outstanding invoices
+Book — browse doctors by specialty, view profile + fees + availability, book an appointment in an available slot
+Appointments — list of own bookings with statuses, ability to cancel
+Records — view own medical records and download as PDF
+Prescriptions — view own prescriptions with medicine details
+Invoices — view + download invoice PDF + see payment status
+Wow features (include in the API spec from the start):
+
+Admin dashboard summary endpoint (counts, revenue, today's appointments)
+Doctor dashboard summary endpoint (today's schedule, week stats)
+Patient dashboard summary endpoint (upcoming, prescriptions, balance)
+Appointment slot availability endpoint (returns free slots for a doctor on a given date)
+Recent activity feed endpoint for admin
+PDF generation for invoices and prescriptions (use pdfkit on the server, expose via download URL with one-time token query param)
+Tech requirements:
+
+React + Vite frontend with TypeScript, TanStack Query, React Router, shadcn/ui components, Tailwind CSS, lucide-react icons, framer-motion for subtle transitions
+Express + TypeScript backend, Zod validation, Drizzle ORM, JWT auth with bcrypt password hashing, role-based middleware
+OpenAPI-first contract: write the spec, run codegen, frontend uses generated typed hooks
+Seed data: 1 admin, 3 doctors (different specialties — Cardiology, Pediatrics, General Medicine), 5 patients, 10 medicines, 8 sample appointments across statuses, a few sample records/prescriptions/invoices so the app isn't empty on first load. Generate doctor portrait photos.
+PDF assets: bundle pdfkit + fontkit fonts so PDF download works in production
+No emojis anywhere in the UI
+Mobile responsive
+Visual direction: Clean clinical aesthetic — calm color palette (medical teal/blue, off-white background, accent color for status badges), generous whitespace, dense data tables that are scannable, smooth page transitions. Should feel like a tool a doctor actually wants to use, not a generic admin panel. Empty states, loading states, and error states should all be designed.
+
+How to use this prompt:
+
+Open Replit and create a new project
+In the chat with the agent, paste the entire prompt above
+The agent will scaffold everything, build it, and seed demo data — takes about 10–15 minutes end-to-end
+Once it's running, log in with the demo buttons to verify, then publish
+To grab a copy of the version that's already in this project:
+
+Click the three-dot menu (⋯) on the Files panel → Download as zip
+The relevant folders are artifacts/hms/, artifacts/api-server/, and lib/db/, lib/api-spec/, lib/api-client-react/, lib/api-zod/
