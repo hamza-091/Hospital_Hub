@@ -77,14 +77,14 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.get("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const invoice = await Invoice.findById(id).lean();
   if (!invoice) { res.status(404).json({ error: "Invoice not found" }); return; }
   res.json(await buildInvoiceWithDetails(invoice));
 });
 
 router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const { status } = req.body;
   const updates: any = {};
   if (status !== undefined) {
@@ -97,7 +97,7 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const invoice = await Invoice.findById(id).lean();
   if (!invoice) { res.status(404).json({ error: "Invoice not found" }); return; }
   const details = await buildInvoiceWithDetails(invoice);
@@ -130,17 +130,18 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => 
   lineItems.forEach((item: any) => {
     doc.font("Helvetica").text(item.description || "", { continued: true, width: 250 });
     doc.text(String(item.quantity || 1), { continued: true, width: 60, align: "right" });
-    doc.text(`$${(item.unitPrice || 0).toFixed(2)}`, { continued: true, width: 100, align: "right" });
-    doc.text(`$${(item.total || 0).toFixed(2)}`, { width: 100, align: "right" });
+    doc.text(`PKR ${(item.unitPrice || 0).toFixed(2)}`, { continued: true, width: 100, align: "right" });
+    doc.text(`PKR ${(item.total || 0).toFixed(2)}`, { width: 100, align: "right" });
   });
 
   doc.moveTo(50, doc.y).lineTo(560, doc.y).stroke();
   doc.moveDown(0.5);
-  doc.font("Helvetica-Bold").text("Subtotal: ", { continued: true }).font("Helvetica").text(`$${Number(invoice.subtotal).toFixed(2)}`);
-  doc.font("Helvetica-Bold").text("Tax: ", { continued: true }).font("Helvetica").text(`$${Number(invoice.tax).toFixed(2)}`);
-  doc.fontSize(13).font("Helvetica-Bold").text("Total: ", { continued: true }).text(`$${Number(invoice.total).toFixed(2)}`);
+  doc.font("Helvetica-Bold").text("Subtotal: ", { continued: true }).font("Helvetica").text(`PKR ${Number(invoice.subtotal).toFixed(2)}`);
+  doc.font("Helvetica-Bold").text("Tax: ", { continued: true }).font("Helvetica").text(`PKR ${Number(invoice.tax).toFixed(2)}`);
+  doc.fontSize(13).font("Helvetica-Bold").text("Total: ", { continued: true }).text(`PKR ${Number(invoice.total).toFixed(2)}`);
 
   doc.end();
 });
 
 export default router;
+

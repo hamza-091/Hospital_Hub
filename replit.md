@@ -33,8 +33,8 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 ## Demo Accounts (after seeding, password `demo1234`)
 
-- `admin@hms.demo` (admin)
-- `dr.james@hms.demo`, `dr.sarah@hms.demo`, `dr.marcus@hms.demo` (doctors)
-- `alice@hms.demo`, `bob@hms.demo`, `carol@hms.demo`, `david@hms.demo`, `emily@hms.demo` (patients)
+- `admin@hms.demo` (admin: Muhammad Hamza)
+- `dr.james@hms.demo` (Dr. Ahmed Raza), `dr.sarah@hms.demo` (Dr. Ayesha Khan), `dr.marcus@hms.demo` (Dr. Bilal Siddiqui)
+- `alice@hms.demo` (Ayesha Iqbal), `bob@hms.demo` (Usman Ali), `carol@hms.demo` (Fatima Noor), `david@hms.demo` (Imran Haider), `emily@hms.demo` (Zainab Malik)
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.

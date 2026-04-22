@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Stethoscope, Calendar, Clock, CheckCircle } from "lucide-react";
 import { useLocation } from "wouter";
+import { formatPKR } from "@/lib/currency";
 
 export default function PatientBook() {
   const { user } = useAuth();
@@ -58,6 +59,14 @@ export default function PatientBook() {
   const doctor = (doctors?.doctors ?? []).find(d => d.id === selectedDoctor);
   const today = new Date().toISOString().split("T")[0];
 
+  const slotItems = (slots?.availableSlots ?? []).map((start) => {
+    const [hours, minutes] = start.split(":").map(Number);
+    const startDate = new Date(Date.UTC(2000, 0, 1, hours, minutes));
+    const endDate = new Date(startDate.getTime() + 30 * 60 * 1000);
+    const end = `${String(endDate.getUTCHours()).padStart(2, "0")}:${String(endDate.getUTCMinutes()).padStart(2, "0")}`;
+    return { start, end };
+  });
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-center gap-2">
@@ -103,7 +112,7 @@ export default function PatientBook() {
                         <div className="flex items-center gap-3 mt-0.5">
                           <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{doc.specialty}</span>
                           {doc.yearsExperience && <span className="text-xs text-muted-foreground">{doc.yearsExperience}y exp</span>}
-                          {doc.consultationFee && <span className="text-xs text-muted-foreground">${doc.consultationFee} fee</span>}
+                          {doc.consultationFee && <span className="text-xs text-muted-foreground">{formatPKR(doc.consultationFee)} fee</span>}
                         </div>
                       </div>
                     </div>
@@ -134,17 +143,15 @@ export default function PatientBook() {
                   <div className="grid grid-cols-3 gap-2">
                     {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-10 rounded" />)}
                   </div>
-                ) : (slots?.slots ?? []).length === 0 ? (
+                ) : slotItems.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">No slots available for this date</p>
                 ) : (
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                    {(slots?.slots ?? []).map((slot) => (
+                    {slotItems.map((slot) => (
                       <button
                         key={slot.start}
-                        disabled={!slot.available}
                         onClick={() => setSelectedSlot({ start: slot.start, end: slot.end })}
                         className={`p-2.5 rounded-lg border text-xs font-medium transition-colors ${
-                          !slot.available ? "bg-muted/50 text-muted-foreground/50 cursor-not-allowed" :
                           selectedSlot?.start === slot.start ? "bg-primary text-primary-foreground border-primary" :
                           "hover:border-primary hover:bg-primary/5"
                         }`}

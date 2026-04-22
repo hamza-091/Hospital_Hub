@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Receipt, CheckCircle, Clock, XCircle, Download, Calendar } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { formatPKR } from "@/lib/currency";
 
 const statusConfig = {
   pending: { icon: Clock, className: "bg-yellow-100 text-yellow-700", label: "Pending" },
@@ -38,7 +39,7 @@ export default function PatientInvoices() {
         <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 flex items-center gap-3">
           <Clock className="h-5 w-5 text-yellow-600 shrink-0" />
           <div>
-            <p className="text-sm font-medium text-yellow-800">Outstanding Balance: ${totalPending.toLocaleString()}</p>
+            <p className="text-sm font-medium text-yellow-800">Outstanding Balance: {formatPKR(totalPending)}</p>
             <p className="text-xs text-yellow-600">Please contact reception to settle pending invoices.</p>
           </div>
         </div>
@@ -83,14 +84,14 @@ export default function PatientInvoices() {
                             {(inv.items ?? []).map((item, idx) => (
                               <div key={idx} className="flex items-center justify-between text-xs text-muted-foreground">
                                 <span>{item.description}</span>
-                                <span>${Number(item.amount).toLocaleString()}</span>
+                                <span>{formatPKR(item.amount)}</span>
                               </div>
                             ))}
                           </div>
                         )}
                         <div className="mt-2 pt-2 border-t flex items-center justify-between">
                           <span className="text-sm font-semibold">Total</span>
-                          <span className="text-sm font-bold">${Number(inv.totalAmount).toLocaleString()}</span>
+                          <span className="text-sm font-bold">{formatPKR(inv.totalAmount)}</span>
                         </div>
                       </div>
                     </div>

@@ -68,10 +68,11 @@ router.post("/medical-records", requireAuth, async (req, res): Promise<void> => 
 });
 
 router.get("/medical-records/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const record = await MedicalRecord.findById(id).lean();
   if (!record) { res.status(404).json({ error: "Record not found" }); return; }
   res.json(await buildRecordWithDetails(record));
 });
 
 export default router;
+

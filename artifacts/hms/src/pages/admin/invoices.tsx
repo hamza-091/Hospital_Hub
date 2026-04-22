@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Search, Download, CheckCircle, Clock, XCircle } from "lucide-react";
 import { format } from "date-fns";
+import { formatPKR } from "@/lib/currency";
 
 const statusConfig = {
   pending: { icon: Clock, className: "bg-yellow-100 text-yellow-700", label: "Pending" },
@@ -45,7 +46,7 @@ export default function AdminInvoices() {
   };
 
   const filtered = (data?.invoices ?? []).filter(inv =>
-    !search || inv.patient?.name?.toLowerCase().includes(search.toLowerCase())
+    !search || inv.patient?.user?.name?.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -97,11 +98,11 @@ export default function AdminInvoices() {
                     return (
                       <tr key={inv.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
                         <td className="px-4 py-3 font-mono text-xs font-medium text-muted-foreground">#{String(inv.id).padStart(5, "0")}</td>
-                        <td className="px-4 py-3 font-medium">{inv.patient?.name ?? "—"}</td>
+                        <td className="px-4 py-3 font-medium">{inv.patient?.user?.name ?? "-"}</td>
                         <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
                           {format(new Date(inv.invoiceDate), "MMM d, yyyy")}
                         </td>
-                        <td className="px-4 py-3 font-semibold">${Number(inv.totalAmount).toLocaleString()}</td>
+                        <td className="px-4 py-3 font-semibold">{formatPKR(inv.totalAmount)}</td>
                         <td className="px-4 py-3">
                           <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${cfg.className}`}>
                             <Icon className="h-3 w-3" />{cfg.label}
@@ -131,3 +132,4 @@ export default function AdminInvoices() {
     </div>
   );
 }
+

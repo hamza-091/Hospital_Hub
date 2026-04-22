@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar, DollarSign, Pill, Receipt, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
+import { formatPKR } from "@/lib/currency";
 
 const statusColors: Record<string, string> = {
   scheduled: "bg-blue-100 text-blue-700",
@@ -49,7 +50,7 @@ export default function PatientDashboard() {
                 <DollarSign className="h-4 w-4 text-primary" />
               </div>
             </div>
-            <div className="text-2xl font-bold text-red-600">${(dash?.outstandingBalance ?? 0).toLocaleString()}</div>
+            <div className="text-2xl font-bold text-red-600">{formatPKR(dash?.outstandingBalance ?? 0)}</div>
           </CardContent>
         </Card>
         <Card className="hidden md:block">
@@ -90,7 +91,7 @@ export default function PatientDashboard() {
               {(dash?.upcomingAppointments ?? []).map((appt) => (
                 <div key={appt.id} className="flex items-center justify-between py-2 border-b last:border-0">
                   <div>
-                    <p className="text-sm font-medium">Dr. {appt.doctor?.name ?? "—"}</p>
+                    <p className="text-sm font-medium">Dr. {appt.doctor?.user?.name ?? "—"}</p>
                     <p className="text-xs text-muted-foreground">
                       {format(new Date(appt.appointmentDate), "MMM d, yyyy")} · {appt.startTime}
                     </p>
@@ -127,7 +128,7 @@ export default function PatientDashboard() {
                     <p className="text-xs text-muted-foreground">{format(new Date(inv.invoiceDate), "MMM d, yyyy")}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-semibold">${Number(inv.totalAmount).toLocaleString()}</p>
+                    <p className="text-sm font-semibold">{formatPKR(inv.totalAmount)}</p>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                       inv.status === "paid" ? "bg-green-100 text-green-700" :
                       inv.status === "pending" ? "bg-yellow-100 text-yellow-700" :
@@ -143,3 +144,4 @@ export default function PatientDashboard() {
     </div>
   );
 }
+

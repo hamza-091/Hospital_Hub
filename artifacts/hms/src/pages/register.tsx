@@ -220,7 +220,7 @@ export default function Register() {
                       <FormItem><FormLabel>Years of Experience</FormLabel><FormControl><Input type="number" placeholder="5" {...field} /></FormControl><FormMessage /></FormItem>
                     )} />
                     <FormField control={form.control} name="consultationFee" render={({ field }) => (
-                      <FormItem><FormLabel>Consultation Fee ($)</FormLabel><FormControl><Input type="number" placeholder="150" {...field} /></FormControl><FormMessage /></FormItem>
+                      <FormItem><FormLabel>Consultation Fee (PKR)</FormLabel><FormControl><Input type="number" placeholder="3000" {...field} /></FormControl><FormMessage /></FormItem>
                     )} />
                   </div>
                   <FormField control={form.control} name="bio" render={({ field }) => (

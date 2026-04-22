@@ -15,6 +15,28 @@ async function buildDoctorWithUser(doctor: any) {
   return { ...doctor, id: doctor._id, user: publicUser(u) };
 }
 
+async function getDoctorAvailabilityPayload(doctorId: number, date: string) {
+  const doctor = await Doctor.findById(doctorId).lean();
+  if (!doctor) return null;
+
+  const dayStart = new Date(`${date}T00:00:00.000Z`);
+  const dayEnd = new Date(`${date}T23:59:59.999Z`);
+  const booked = await Appointment.find({
+    doctorId,
+    scheduledAt: { $gte: dayStart, $lte: dayEnd },
+    status: { $ne: "cancelled" },
+  }).lean();
+
+  const allSlots = ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30"];
+  const bookedTimes = new Set(booked.map(b => {
+    const d = new Date(b.scheduledAt);
+    return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+  }));
+  const availableSlots = allSlots.filter(s => !bookedTimes.has(s));
+
+  return { date, doctorId, availableSlots, bookedSlots: Array.from(bookedTimes) };
+}
+
 router.get("/doctors", async (req, res): Promise<void> => {
   const { specialty, search } = req.query as { specialty?: string; search?: string };
   const filter: any = {};
@@ -57,14 +79,14 @@ router.post("/doctors", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.get("/doctors/:id", async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const doctor = await Doctor.findById(id).lean();
   if (!doctor) { res.status(404).json({ error: "Doctor not found" }); return; }
   res.json(await buildDoctorWithUser(doctor));
 });
 
 router.patch("/doctors/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const parsed = UpdateDoctorBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const update: any = { ...parsed.data };
@@ -75,27 +97,22 @@ router.patch("/doctors/:id", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.get("/doctors/:id/availability", async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const date = req.query.date as string;
   if (!date) { res.status(400).json({ error: "date required" }); return; }
-  const doctor = await Doctor.findById(id).lean();
-  if (!doctor) { res.status(404).json({ error: "Doctor not found" }); return; }
+  const payload = await getDoctorAvailabilityPayload(id, date);
+  if (!payload) { res.status(404).json({ error: "Doctor not found" }); return; }
+  res.json(payload);
+});
 
-  const dayStart = new Date(`${date}T00:00:00.000Z`);
-  const dayEnd = new Date(`${date}T23:59:59.999Z`);
-  const booked = await Appointment.find({
-    doctorId: id,
-    scheduledAt: { $gte: dayStart, $lte: dayEnd },
-    status: { $ne: "cancelled" },
-  }).lean();
-
-  const allSlots = ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30"];
-  const bookedTimes = new Set(booked.map(b => {
-    const d = new Date(b.scheduledAt);
-    return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
-  }));
-  const availableSlots = allSlots.filter(s => !bookedTimes.has(s));
-  res.json({ date, doctorId: id, availableSlots, bookedSlots: Array.from(bookedTimes) });
+router.get("/doctors/:id/slots", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const date = req.query.date as string;
+  if (!date) { res.status(400).json({ error: "date required" }); return; }
+  const payload = await getDoctorAvailabilityPayload(id, date);
+  if (!payload) { res.status(404).json({ error: "Doctor not found" }); return; }
+  res.json(payload);
 });
 
 export default router;
+

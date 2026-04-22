@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { useForm } from "react-hook-form";
 import { useToast } from "@/hooks/use-toast";
 import { Search, Plus, Stethoscope, DollarSign, Star } from "lucide-react";
+import { formatPKR } from "@/lib/currency";
 
 export default function AdminDoctors() {
   const [search, setSearch] = useState("");
@@ -99,7 +100,7 @@ export default function AdminDoctors() {
                   <Input type="number" {...form.register("yearsExperience")} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Consultation Fee ($)</Label>
+                  <Label>Consultation Fee (PKR)</Label>
                   <Input type="number" step="0.01" {...form.register("consultationFee")} />
                 </div>
                 <div className="space-y-1.5">
@@ -159,7 +160,7 @@ export default function AdminDoctors() {
                   </div>
                   {doc.consultationFee && (
                     <p className="text-sm flex items-center gap-1 text-muted-foreground">
-                      <DollarSign className="h-3.5 w-3.5" />{doc.consultationFee} consultation fee
+                      <DollarSign className="h-3.5 w-3.5" />{formatPKR(doc.consultationFee)} consultation fee
                     </p>
                   )}
                   {doc.qualifications && <p className="text-xs text-muted-foreground">{doc.qualifications}</p>}

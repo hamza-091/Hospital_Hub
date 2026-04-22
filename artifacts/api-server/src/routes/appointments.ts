@@ -87,14 +87,14 @@ router.post("/appointments", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.get("/appointments/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const appt = await Appointment.findById(id).lean();
   if (!appt) { res.status(404).json({ error: "Appointment not found" }); return; }
   res.json(await buildAppointmentWithDetails(appt));
 });
 
 router.patch("/appointments/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const { status, notes, appointmentDate, startTime } = req.body;
   const updates: any = {};
   if (status !== undefined) updates.status = status;
@@ -109,3 +109,4 @@ router.patch("/appointments/:id", requireAuth, async (req, res): Promise<void> =
 });
 
 export default router;
+

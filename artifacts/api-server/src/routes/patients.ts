@@ -34,14 +34,14 @@ router.get("/patients", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.get("/patients/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const patient = await Patient.findById(id).lean();
   if (!patient) { res.status(404).json({ error: "Patient not found" }); return; }
   res.json(await buildPatientWithUser(patient));
 });
 
 router.patch("/patients/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const parsed = UpdatePatientBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const patient = await Patient.findByIdAndUpdate(id, parsed.data, { new: true }).lean();
@@ -50,3 +50,4 @@ router.patch("/patients/:id", requireAuth, async (req, res): Promise<void> => {
 });
 
 export default router;
+

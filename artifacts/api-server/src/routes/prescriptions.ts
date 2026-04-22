@@ -95,14 +95,14 @@ router.post("/prescriptions", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.get("/prescriptions/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const prescription = await Prescription.findById(id).lean();
   if (!prescription) { res.status(404).json({ error: "Prescription not found" }); return; }
   res.json(await buildPrescriptionWithDetails(prescription));
 });
 
 router.get("/prescriptions/:id/pdf", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const prescription = await Prescription.findById(id).lean();
   if (!prescription) { res.status(404).json({ error: "Prescription not found" }); return; }
   const details = await buildPrescriptionWithDetails(prescription);
@@ -127,7 +127,7 @@ router.get("/prescriptions/:id/pdf", requireAuth, async (req, res): Promise<void
   doc.moveTo(50, doc.y).lineTo(560, doc.y).stroke();
   doc.moveDown(0.5);
 
-  details.items.forEach((item, idx) => {
+  details.items.forEach((item: any, idx: number) => {
     doc.fontSize(11).font("Helvetica-Bold").text(`${idx + 1}. ${item.medicine?.name || "N/A"}`);
     if (item.dosage) doc.font("Helvetica").text(`   Dosage: ${item.dosage}`);
     if (item.frequency) doc.font("Helvetica").text(`   Frequency: ${item.frequency}`);
@@ -146,3 +146,4 @@ router.get("/prescriptions/:id/pdf", requireAuth, async (req, res): Promise<void
 });
 
 export default router;
+

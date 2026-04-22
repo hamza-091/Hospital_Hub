@@ -1,7 +1,19 @@
-import "dotenv/config";
-import app from "./app";
+import fs from "node:fs";
+import path from "node:path";
+import dotenv from "dotenv";
 import { logger } from "./lib/logger";
-import { connectDB } from "@workspace/db";
+
+const dotenvCandidates = [
+  path.resolve(process.cwd(), ".env"),
+  path.resolve(process.cwd(), "../../.env"),
+];
+
+for (const dotenvPath of dotenvCandidates) {
+  if (fs.existsSync(dotenvPath)) {
+    dotenv.config({ path: dotenvPath });
+    break;
+  }
+}
 
 const rawPort = process.env["PORT"];
 
@@ -18,7 +30,9 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 async function start() {
+  const { default: app } = await import("./app");
   try {
+    const { connectDB } = await import("@workspace/db");
     logger.info("Connecting to MongoDB...");
     await connectDB();
     logger.info("MongoDB connected");

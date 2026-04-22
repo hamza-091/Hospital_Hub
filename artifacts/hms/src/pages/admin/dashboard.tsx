@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, UserRound, Calendar, DollarSign, FileText, Activity } from "lucide-react";
 import { format } from "date-fns";
+import { formatPKR } from "@/lib/currency";
 
 function StatCard({ title, value, icon: Icon, sub }: { title: string; value: string | number; icon: React.ElementType; sub?: string }) {
   return (
@@ -52,7 +53,7 @@ export default function AdminDashboard() {
         <StatCard title="Today's Appts" value={dash?.todayAppointments ?? 0} icon={Calendar} />
         <StatCard
           title="Monthly Revenue"
-          value={`$${(dash?.monthlyRevenue ?? 0).toLocaleString()}`}
+          value={formatPKR(dash?.monthlyRevenue ?? 0)}
           icon={DollarSign}
           sub={`${dash?.pendingInvoices ?? 0} pending invoices`}
         />
@@ -71,9 +72,9 @@ export default function AdminDashboard() {
               {(dash?.recentAppointments ?? []).map((appt) => (
                 <div key={appt.id} className="flex items-center justify-between py-2 border-b last:border-0">
                   <div>
-                    <p className="text-sm font-medium">{appt.patient?.name ?? "—"}</p>
+                    <p className="text-sm font-medium">{appt.patient?.user?.name ?? "—"}</p>
                     <p className="text-xs text-muted-foreground">
-                      Dr. {appt.doctor?.name ?? "—"} · {format(new Date(appt.appointmentDate), "MMM d, h:mm a")}
+                      Dr. {appt.doctor?.user?.name ?? "—"} · {format(new Date(appt.appointmentDate), "MMM d, h:mm a")}
                     </p>
                   </div>
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColors[appt.status] ?? "bg-gray-100 text-gray-600"}`}>
@@ -134,3 +135,4 @@ export default function AdminDashboard() {
     </div>
   );
 }
+

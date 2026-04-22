@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { useForm } from "react-hook-form";
 import { useToast } from "@/hooks/use-toast";
 import { Search, Plus, Pill, Package } from "lucide-react";
+import { formatPKR } from "@/lib/currency";
 
 export default function AdminMedicines() {
   const [search, setSearch] = useState("");
@@ -23,9 +24,9 @@ export default function AdminMedicines() {
       genericName: "",
       manufacturer: "",
       category: "",
-      unitPrice: "",
-      stockQty: "",
-      description: "",
+      price: "",
+      stockQuantity: "",
+      expiryDate: "",
     },
   });
 
@@ -37,9 +38,9 @@ export default function AdminMedicines() {
           genericName: values.genericName || undefined,
           manufacturer: values.manufacturer || undefined,
           category: values.category || undefined,
-          unitPrice: values.unitPrice ? Number(values.unitPrice) : undefined,
-          stockQty: values.stockQty ? Number(values.stockQty) : undefined,
-          description: values.description || undefined,
+          price: values.price ? Number(values.price) : undefined,
+          stockQuantity: values.stockQuantity ? Number(values.stockQuantity) : 0,
+          expiryDate: values.expiryDate || undefined,
         },
       },
       {
@@ -86,16 +87,16 @@ export default function AdminMedicines() {
                   <Input {...form.register("manufacturer")} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Unit Price ($)</Label>
-                  <Input type="number" step="0.01" {...form.register("unitPrice")} />
+                  <Label>Unit Price (PKR)</Label>
+                  <Input type="number" step="0.01" {...form.register("price")} />
                 </div>
                 <div className="space-y-1.5 col-span-2">
                   <Label>Stock Quantity</Label>
-                  <Input type="number" {...form.register("stockQty")} />
+                  <Input type="number" {...form.register("stockQuantity")} />
                 </div>
                 <div className="space-y-1.5 col-span-2">
-                  <Label>Description</Label>
-                  <Input {...form.register("description")} />
+                  <Label>Expiry Date</Label>
+                  <Input type="date" {...form.register("expiryDate")} />
                 </div>
               </div>
               <Button type="submit" className="w-full" disabled={createMed.isPending}>
@@ -138,17 +139,17 @@ export default function AdminMedicines() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{med.category ?? "—"}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{med.manufacturer ?? "—"}</td>
-                    <td className="px-4 py-3 font-medium">{med.unitPrice ? `$${med.unitPrice}` : "—"}</td>
+                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{med.category ?? "-"}</td>
+                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{med.manufacturer ?? "-"}</td>
+                    <td className="px-4 py-3 font-medium">{med.price ? formatPKR(med.price) : "-"}</td>
                     <td className="px-4 py-3">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        (med.stockQty ?? 0) > 50 ? "bg-green-100 text-green-700" :
-                        (med.stockQty ?? 0) > 10 ? "bg-yellow-100 text-yellow-700" :
+                        (med.stockQuantity ?? 0) > 50 ? "bg-green-100 text-green-700" :
+                        (med.stockQuantity ?? 0) > 10 ? "bg-yellow-100 text-yellow-700" :
                         "bg-red-100 text-red-700"
                       }`}>
                         <Package className="inline h-3 w-3 mr-1" />
-                        {med.stockQty ?? 0}
+                        {med.stockQuantity ?? 0}
                       </span>
                     </td>
                   </tr>

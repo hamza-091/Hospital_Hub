@@ -1,11 +1,34 @@
-import "dotenv/config";
+import fs from "node:fs";
+import path from "node:path";
+import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
-import {
-  connectDB, mongoose,
-  User, Doctor, Patient, Appointment, MedicalRecord, Prescription, Medicine, Invoice,
-} from "@workspace/db";
 
 async function seed() {
+  const dotenvCandidates = [
+    path.resolve(process.cwd(), ".env"),
+    path.resolve(process.cwd(), "../.env"),
+    path.resolve(process.cwd(), "../../.env"),
+  ];
+  for (const dotenvPath of dotenvCandidates) {
+    if (fs.existsSync(dotenvPath)) {
+      dotenv.config({ path: dotenvPath });
+      break;
+    }
+  }
+
+  const {
+    connectDB,
+    mongoose,
+    User,
+    Doctor,
+    Patient,
+    Appointment,
+    MedicalRecord,
+    Prescription,
+    Medicine,
+    Invoice,
+  } = await import("@workspace/db");
+
   console.log("Connecting to MongoDB...");
   await connectDB();
   console.log("Seeding database...");
@@ -15,37 +38,49 @@ async function seed() {
   // ---- USERS ----
   async function getOrCreateUser(values: { name: string; email: string; role: "admin" | "doctor" | "patient"; phone: string }) {
     let user = await User.findOne({ email: values.email });
-    if (user) return user;
+    if (user) {
+      user.name = values.name;
+      user.role = values.role;
+      user.phone = values.phone;
+      user.status = "active";
+      user.passwordHash = hash;
+      await user.save();
+      return user;
+    }
     user = await User.create({ ...values, passwordHash: hash, status: "active" });
     return user;
   }
 
-  const admin = await getOrCreateUser({ name: "System Administrator", email: "admin@hms.demo", role: "admin", phone: "+1-555-000-0001" });
-  const drJamesUser = await getOrCreateUser({ name: "Dr. James Carter", email: "dr.james@hms.demo", role: "doctor", phone: "+1-555-100-0001" });
-  const drSarahUser = await getOrCreateUser({ name: "Dr. Sarah Patel", email: "dr.sarah@hms.demo", role: "doctor", phone: "+1-555-100-0002" });
-  const drMarcusUser = await getOrCreateUser({ name: "Dr. Marcus Chen", email: "dr.marcus@hms.demo", role: "doctor", phone: "+1-555-100-0003" });
-  const aliceUser = await getOrCreateUser({ name: "Alice Johnson", email: "alice@hms.demo", role: "patient", phone: "+1-555-200-0001" });
-  const bobUser = await getOrCreateUser({ name: "Bob Williams", email: "bob@hms.demo", role: "patient", phone: "+1-555-200-0002" });
-  const carolUser = await getOrCreateUser({ name: "Carol Davis", email: "carol@hms.demo", role: "patient", phone: "+1-555-200-0003" });
-  const davidUser = await getOrCreateUser({ name: "David Miller", email: "david@hms.demo", role: "patient", phone: "+1-555-200-0004" });
-  const emilyUser = await getOrCreateUser({ name: "Emily Brown", email: "emily@hms.demo", role: "patient", phone: "+1-555-200-0005" });
+  const admin = await getOrCreateUser({ name: "Muhammad Hamza", email: "admin@hms.demo", role: "admin", phone: "+92-300-0000001" });
+  const drJamesUser = await getOrCreateUser({ name: "Dr. Ahmed Raza", email: "dr.james@hms.demo", role: "doctor", phone: "+92-301-1000001" });
+  const drSarahUser = await getOrCreateUser({ name: "Dr. Ayesha Khan", email: "dr.sarah@hms.demo", role: "doctor", phone: "+92-301-1000002" });
+  const drMarcusUser = await getOrCreateUser({ name: "Dr. Bilal Siddiqui", email: "dr.marcus@hms.demo", role: "doctor", phone: "+92-301-1000003" });
+  const aliceUser = await getOrCreateUser({ name: "Ayesha Iqbal", email: "alice@hms.demo", role: "patient", phone: "+92-302-2000001" });
+  const bobUser = await getOrCreateUser({ name: "Usman Ali", email: "bob@hms.demo", role: "patient", phone: "+92-302-2000002" });
+  const carolUser = await getOrCreateUser({ name: "Fatima Noor", email: "carol@hms.demo", role: "patient", phone: "+92-302-2000003" });
+  const davidUser = await getOrCreateUser({ name: "Imran Haider", email: "david@hms.demo", role: "patient", phone: "+92-302-2000004" });
+  const emilyUser = await getOrCreateUser({ name: "Zainab Malik", email: "emily@hms.demo", role: "patient", phone: "+92-302-2000005" });
 
   console.log("Users seeded.");
 
   // ---- DOCTORS ----
   async function getOrCreateDoctor(userId: number, values: any) {
     let doc = await Doctor.findOne({ userId });
-    if (doc) return doc;
+    if (doc) {
+      Object.assign(doc, values);
+      await doc.save();
+      return doc;
+    }
     doc = await Doctor.create({ userId, ...values });
     return doc;
   }
 
   const james = await getOrCreateDoctor(drJamesUser._id, {
     specialty: "Cardiology",
-    qualifications: "MD, FACC, Board Certified Cardiologist",
+    qualifications: "MBBS, FCPS Cardiology",
     yearsExperience: 15,
-    consultationFee: "250",
-    bio: "Dr. Carter is a leading cardiologist with 15+ years of experience in interventional cardiology and heart failure management.",
+    consultationFee: "4000",
+    bio: "Experienced cardiologist focusing on heart failure and preventive cardiac care.",
     photoUrl: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=300&h=300&fit=crop",
     availableDays: "Mon,Tue,Wed,Thu,Fri",
     availableHours: "09:00-17:00",
@@ -53,10 +88,10 @@ async function seed() {
 
   const sarah = await getOrCreateDoctor(drSarahUser._id, {
     specialty: "Pediatrics",
-    qualifications: "MD, FAAP, Pediatric Emergency Medicine",
+    qualifications: "MBBS, FCPS Pediatrics",
     yearsExperience: 10,
-    consultationFee: "180",
-    bio: "Dr. Patel specializes in pediatric care and child development, known for her gentle approach with young patients.",
+    consultationFee: "3200",
+    bio: "Pediatric specialist known for compassionate child care and vaccination guidance.",
     photoUrl: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=300&h=300&fit=crop",
     availableDays: "Mon,Wed,Thu,Fri",
     availableHours: "08:00-16:00",
@@ -64,10 +99,10 @@ async function seed() {
 
   const marcus = await getOrCreateDoctor(drMarcusUser._id, {
     specialty: "General Medicine",
-    qualifications: "MD, Internal Medicine, Primary Care",
+    qualifications: "MBBS, FCPS Internal Medicine",
     yearsExperience: 8,
-    consultationFee: "150",
-    bio: "Dr. Chen provides comprehensive primary care, focusing on preventive medicine and chronic disease management.",
+    consultationFee: "2800",
+    bio: "General physician providing primary care and chronic disease follow-ups.",
     photoUrl: "https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=300&h=300&fit=crop",
     availableDays: "Mon,Tue,Wed,Thu,Fri,Sat",
     availableHours: "08:00-18:00",
@@ -78,47 +113,51 @@ async function seed() {
   // ---- PATIENTS ----
   async function getOrCreatePatient(userId: number, values: any) {
     let pat = await Patient.findOne({ userId });
-    if (pat) return pat;
+    if (pat) {
+      Object.assign(pat, values);
+      await pat.save();
+      return pat;
+    }
     pat = await Patient.create({ userId, ...values });
     return pat;
   }
 
   const alice = await getOrCreatePatient(aliceUser._id, {
     dateOfBirth: "1988-05-15", gender: "female", bloodGroup: "A+",
-    address: "123 Maple Street, Springfield, IL 62701",
-    emergencyContact: "John Johnson: +1-555-300-0001",
+    address: "Johar Town, Lahore, Punjab, Pakistan",
+    emergencyContact: "Saad Iqbal: +92-303-3000001",
     allergies: "Penicillin",
     medicalHistory: "Hypertension (diagnosed 2019), managed with medication",
   });
 
   const bob = await getOrCreatePatient(bobUser._id, {
     dateOfBirth: "1975-09-22", gender: "male", bloodGroup: "O+",
-    address: "456 Oak Avenue, Springfield, IL 62702",
-    emergencyContact: "Mary Williams: +1-555-300-0002",
+    address: "Gulshan-e-Iqbal, Karachi, Sindh, Pakistan",
+    emergencyContact: "Hina Ali: +92-303-3000002",
     allergies: "None",
     medicalHistory: "Type 2 Diabetes (diagnosed 2018), controlled with diet and metformin",
   });
 
   const carol = await getOrCreatePatient(carolUser._id, {
     dateOfBirth: "1992-03-08", gender: "female", bloodGroup: "B+",
-    address: "789 Pine Road, Springfield, IL 62703",
-    emergencyContact: "Tom Davis: +1-555-300-0003",
+    address: "Bahria Town, Rawalpindi, Punjab, Pakistan",
+    emergencyContact: "Yasir Noor: +92-303-3000003",
     allergies: "Sulfa drugs, Aspirin",
     medicalHistory: "Asthma (childhood onset), seasonal allergies",
   });
 
   const david = await getOrCreatePatient(davidUser._id, {
     dateOfBirth: "1965-11-30", gender: "male", bloodGroup: "AB-",
-    address: "321 Elm Street, Springfield, IL 62704",
-    emergencyContact: "Susan Miller: +1-555-300-0004",
+    address: "Satellite Town, Quetta, Balochistan, Pakistan",
+    emergencyContact: "Samina Haider: +92-303-3000004",
     allergies: "Latex",
     medicalHistory: "Coronary artery disease, Hyperlipidemia",
   });
 
   const emily = await getOrCreatePatient(emilyUser._id, {
     dateOfBirth: "2000-07-14", gender: "female", bloodGroup: "O-",
-    address: "654 Birch Lane, Springfield, IL 62705",
-    emergencyContact: "Robert Brown: +1-555-300-0005",
+    address: "Hayatabad, Peshawar, Khyber Pakhtunkhwa, Pakistan",
+    emergencyContact: "Naveed Malik: +92-303-3000005",
     allergies: "None known",
     medicalHistory: "No significant medical history",
   });
@@ -127,16 +166,16 @@ async function seed() {
 
   // ---- MEDICINES ----
   const medicineSeed = [
-    { name: "Lisinopril", genericName: "Lisinopril", manufacturer: "Merck", price: "12.50", stockQuantity: 250, expiryDate: "2026-12-31", category: "Antihypertensive" },
-    { name: "Metformin 500mg", genericName: "Metformin HCl", manufacturer: "Bristol-Myers Squibb", price: "8.75", stockQuantity: 400, expiryDate: "2026-08-15", category: "Antidiabetic" },
-    { name: "Atorvastatin 20mg", genericName: "Atorvastatin Calcium", manufacturer: "Pfizer", price: "18.00", stockQuantity: 180, expiryDate: "2025-11-30", category: "Statin" },
-    { name: "Salbutamol Inhaler", genericName: "Albuterol", manufacturer: "GlaxoSmithKline", price: "35.00", stockQuantity: 60, expiryDate: "2025-09-01", category: "Bronchodilator" },
-    { name: "Amoxicillin 500mg", genericName: "Amoxicillin", manufacturer: "Sandoz", price: "9.25", stockQuantity: 320, expiryDate: "2026-03-15", category: "Antibiotic" },
-    { name: "Omeprazole 20mg", genericName: "Omeprazole", manufacturer: "AstraZeneca", price: "7.50", stockQuantity: 12, expiryDate: "2025-07-20", category: "PPI" },
-    { name: "Aspirin 81mg", genericName: "Acetylsalicylic Acid", manufacturer: "Bayer", price: "4.00", stockQuantity: 500, expiryDate: "2027-01-01", category: "Antiplatelet" },
-    { name: "Metoprolol 25mg", genericName: "Metoprolol Succinate", manufacturer: "AstraZeneca", price: "22.00", stockQuantity: 8, expiryDate: "2025-06-30", category: "Beta-blocker" },
-    { name: "Cetirizine 10mg", genericName: "Cetirizine HCl", manufacturer: "UCB Pharma", price: "6.00", stockQuantity: 200, expiryDate: "2026-10-01", category: "Antihistamine" },
-    { name: "Ibuprofen 400mg", genericName: "Ibuprofen", manufacturer: "Reckitt Benckiser", price: "5.50", stockQuantity: 350, expiryDate: "2026-05-15", category: "NSAID" },
+    { name: "Lisinopril", genericName: "Lisinopril", manufacturer: "Getz Pharma", price: "850", stockQuantity: 250, expiryDate: "2026-12-31", category: "Antihypertensive" },
+    { name: "Metformin 500mg", genericName: "Metformin HCl", manufacturer: "Sami Pharmaceuticals", price: "620", stockQuantity: 400, expiryDate: "2026-08-15", category: "Antidiabetic" },
+    { name: "Atorvastatin 20mg", genericName: "Atorvastatin Calcium", manufacturer: "Highnoon", price: "980", stockQuantity: 180, expiryDate: "2025-11-30", category: "Statin" },
+    { name: "Salbutamol Inhaler", genericName: "Albuterol", manufacturer: "GSK Pakistan", price: "1650", stockQuantity: 60, expiryDate: "2025-09-01", category: "Bronchodilator" },
+    { name: "Amoxicillin 500mg", genericName: "Amoxicillin", manufacturer: "Searle", price: "700", stockQuantity: 320, expiryDate: "2026-03-15", category: "Antibiotic" },
+    { name: "Omeprazole 20mg", genericName: "Omeprazole", manufacturer: "AGP", price: "550", stockQuantity: 12, expiryDate: "2025-07-20", category: "PPI" },
+    { name: "Aspirin 81mg", genericName: "Acetylsalicylic Acid", manufacturer: "Bayer Pakistan", price: "420", stockQuantity: 500, expiryDate: "2027-01-01", category: "Antiplatelet" },
+    { name: "Metoprolol 25mg", genericName: "Metoprolol Succinate", manufacturer: "Hilton Pharma", price: "1200", stockQuantity: 8, expiryDate: "2025-06-30", category: "Beta-blocker" },
+    { name: "Cetirizine 10mg", genericName: "Cetirizine HCl", manufacturer: "Martin Dow", price: "450", stockQuantity: 200, expiryDate: "2026-10-01", category: "Antihistamine" },
+    { name: "Ibuprofen 400mg", genericName: "Ibuprofen", manufacturer: "The Searle Company", price: "380", stockQuantity: 350, expiryDate: "2026-05-15", category: "NSAID" },
   ];
 
   const medicineIds: number[] = [];
@@ -242,10 +281,10 @@ async function seed() {
         patientId: alice._id,
         appointmentId: apptIds[5],
         lineItems: [
-          { description: "Cardiology Consultation", quantity: 1, unitPrice: 250, total: 250 },
-          { description: "Echocardiogram", quantity: 1, unitPrice: 380, total: 380 },
+          { description: "Cardiology Consultation", quantity: 1, unitPrice: 4000, total: 4000 },
+          { description: "Echocardiogram", quantity: 1, unitPrice: 8500, total: 8500 },
         ],
-        subtotal: "630", tax: "63", total: "693",
+        subtotal: "12500", tax: "1250", total: "13750",
         status: "paid",
         issuedAt: twoWeeksAgo,
         paidAt: new Date(twoWeeksAgo.getTime() + 86400000),
@@ -254,10 +293,10 @@ async function seed() {
         patientId: bob._id,
         appointmentId: apptIds[6],
         lineItems: [
-          { description: "General Medicine Consultation", quantity: 1, unitPrice: 150, total: 150 },
-          { description: "HbA1c Blood Test", quantity: 1, unitPrice: 85, total: 85 },
+          { description: "General Medicine Consultation", quantity: 1, unitPrice: 2800, total: 2800 },
+          { description: "HbA1c Blood Test", quantity: 1, unitPrice: 2200, total: 2200 },
         ],
-        subtotal: "235", tax: "23.50", total: "258.50",
+        subtotal: "5000", tax: "500", total: "5500",
         status: "unpaid",
         issuedAt: new Date(lastWeek.getTime()),
       },
@@ -265,11 +304,11 @@ async function seed() {
         patientId: david._id,
         appointmentId: null,
         lineItems: [
-          { description: "Cardiology Consultation", quantity: 1, unitPrice: 250, total: 250 },
-          { description: "Stress Echocardiogram", quantity: 1, unitPrice: 450, total: 450 },
-          { description: "Cardiac Monitoring (24hr)", quantity: 1, unitPrice: 200, total: 200 },
+          { description: "Cardiology Consultation", quantity: 1, unitPrice: 4000, total: 4000 },
+          { description: "Stress Echocardiogram", quantity: 1, unitPrice: 9500, total: 9500 },
+          { description: "Cardiac Monitoring (24hr)", quantity: 1, unitPrice: 5200, total: 5200 },
         ],
-        subtotal: "900", tax: "90", total: "990",
+        subtotal: "18700", tax: "1870", total: "20570",
         status: "unpaid",
         issuedAt: new Date(now.getTime() - 3 * 86400000),
       },

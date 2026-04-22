@@ -35,14 +35,14 @@ router.get("/users", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.get("/users/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const user = await User.findById(id).lean();
   if (!user) { res.status(404).json({ error: "User not found" }); return; }
   res.json(publicUser(user));
 });
 
 router.patch("/users/:id", requireAuth, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const parsed = UpdateUserBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const user = await User.findByIdAndUpdate(id, parsed.data, { new: true }).lean();
@@ -51,3 +51,4 @@ router.patch("/users/:id", requireAuth, async (req, res): Promise<void> => {
 });
 
 export default router;
+
