@@ -1,17 +1,21 @@
 {
-  "name": "workspace",
-  "version": "0.0.0",
+  "name": "hospital-hub",
+  "version": "1.0.0",
+  "description": "Hospital Management System — Full-stack monorepo with React frontend and Express backend",
   "license": "MIT",
   "scripts": {
-    "preinstall": "node -e \"const fs=require('fs');['package-lock.json','yarn.lock'].forEach((f)=>{try{fs.rmSync(f,{force:true});}catch{}});const ua=process.env.npm_config_user_agent||'';if(!ua.startsWith('pnpm/')){console.error('Use pnpm instead');process.exit(1);}\"",
+    "dev": "pnpm run dev:backend & pnpm run dev:frontend",
+    "dev:frontend": "pnpm --filter @workspace/hms run dev",
+    "dev:backend": "pnpm --filter @workspace/api-server run dev",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./frontend\" --filter \"./backend\" --filter \"./scripts\" --if-present run typecheck",
+    "seed": "pnpm --filter @workspace/scripts run seed"
   },
   "private": true,
   "devDependencies": {
     "typescript": "~5.9.2",
     "prettier": "^3.8.1"
   },
-  "packageManager": "pnpm@10.33.1+sha512.05ba3c1d5d1c18f68df06470d74055e62d41fc110a0c660db1b2dfb2785327f04cf0f68345d4609bc52089e7fa0343c31593b2f9594e2c5d5da426230acc9820"
+  "packageManager": "pnpm@10.33.1"
 }
